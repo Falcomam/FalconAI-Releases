@@ -1,5 +1,14 @@
 # Falcon Ai — Consolidated development backlog (2026-11-24)
 
+## Extended coding sprint — review pipeline and model-response quality
+
+- Added risk hints for potentially high-impact Python APIs, including subprocess, dynamic execution and writing files. The analyzer uses AST only, flags common import aliases and explicitly labels findings **advisory only**, not proof of safety.
+- Added `self_improve_chat_preview.py`: renders a bounded human-readable source diff, exact fingerprint, risk notes and explicit no-execution/no-installation labels. It is **not yet connected to the installed Falcon GUI**.
+- Expanded `self_improve_test_plan.py` to carry advisory manual-review warnings forward without executing any dynamic tests. Source and test plan remain pinned to independently trusted SHA-256 manifests.
+- Hardened the read-only source snapshot loader to reject symlink/reparse ancestors and added regression coverage.
+- Improved `developer_workspace.parse_proposal`: accepts a single clean Markdown JSON fence from smaller Ollama models while refusing surrounding commentary, duplicate keys and nonstandard JSON values. Added strict JSON/TOML project-file validation and line/column JSON errors.
+- **Release status:** These changes are in development source only. User's installed V13.9.1 remains unchanged. Complete Windows CI suites and package/upgrade integration are required before any new release.
+
 ## Current self-improvement development sprint — 2026-11-24
 
 - The review-only source proposal gate and SHA-256 baseline bridge passed Windows regression tests (run 45504551336).
