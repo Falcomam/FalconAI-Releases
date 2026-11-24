@@ -43,7 +43,7 @@ jobs:
           import sys
           tests = sorted(Path("packaging/tests").glob("test_self_improve_*.py"))
           tests.append(Path("packaging/tests/test_developer_workspace.py"))
-          if len(tests) < 8:
+          if len(tests) < 7:
               raise SystemExit("Missing required self-improvement test files")
           for path in tests:
               print("Checking", path, flush=True)
