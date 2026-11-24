@@ -147,6 +147,34 @@ class DeveloperChatTests(unittest.TestCase):
             save.assert_called_once_with("llama3.2:3b", installed_models=installed["models"])
         self.assertIn("PC approval and STOP permissions", self.app.messages[-1][1])
 
+    def test_concurrent_generation_cannot_discard_pending_review(self):
+        p = project()
+        info = workspace.review_proposal(p)
+        self.chat.pending = {"plan": p, "review": info, "reviewed": True}
+        self.chat._running = True
+        self.app.busy = True
+        self.chat.dispatch("/project python write a new simple program")
+        self.assertEqual(self.chat.pending["review"]["fingerprint"], info["fingerprint"])
+        self.assertIn("already working", self.app.messages[-1][1])
+
+    def test_stop_frees_busy_state_and_ignores_stale_callbacks(self):
+        token = threading.Event()
+        self.chat._event = token
+        self.chat._running = True
+        self.app.busy = True
+        serial_before = self.chat._serial
+        self.chat.stop()
+        self.assertTrue(token.is_set())
+        self.assertFalse(self.chat._running)
+        self.assertFalse(self.app.busy)
+        self.assertIsNone(self.chat._event)
+        self.assertIn("stopped", self.app.status.lower())
+        self.assertGreater(self.chat._serial, serial_before)
+        # Late completion from a cancelled generation cannot restore a draft.
+        self.chat._finish(serial_before, lambda plan: setattr(
+            self.chat, "pending", plan), {"unsafe": True})
+        self.assertIsNone(self.chat.pending)
+
     def test_stop_cancels_active_work(self):
         token = threading.Event()
         self.chat._event = token
