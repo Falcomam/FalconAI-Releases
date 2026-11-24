@@ -7,6 +7,9 @@ installed application. Never pass a model-supplied root directory.
 from __future__ import annotations
 
 import os
+import hashlib
+import hmac
+import re
 from pathlib import Path
 import stat
 
@@ -93,4 +96,24 @@ def read_snapshot(root, paths):
             snapshot[path] = content
         except (OSError, UnicodeError) as exc:
             raise proposals.ProposalError("Cannot safely read source: " + path) from exc
+    return snapshot
+
+
+def read_pinned_snapshot(root, expected_sha256):
+    """Require exact source digests provided by an independently trusted caller.
+
+    A hash supplied by the model is NOT a security boundary. CI must pin these
+    hashes to a reviewed commit or release before calling this function.
+    """
+    if not isinstance(expected_sha256, dict) or not 1 <= len(expected_sha256) <= MAX_SOURCE_FILES:
+        raise proposals.ProposalError("Trusted source digest manifest required")
+    for path, digest in expected_sha256.items():
+        proposals._path(path)
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise proposals.ProposalError("Expected lower-case SHA256 digest for " + path)
+    snapshot = read_snapshot(root, list(expected_sha256))
+    for path, content in snapshot.items():
+        actual = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        if not hmac.compare_digest(actual, expected_sha256[path]):
+            raise proposals.ProposalError("Trusted checkout source digest mismatch: " + path)
     return snapshot
