@@ -1,0 +1,65 @@
+name: Falcon Ai - Windows installer update handoff test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/falcon-ai-update-handoff.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-packaged-updater:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Download independently published Falcon Ai installer
+        shell: pwsh
+        run: |
+          gh release download v13.7.0 -p 'Falcon_Ai_Setup.exe' -D $env:RUNNER_TEMP --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Trusted released installer unavailable' }
+          $exe = Join-Path $env:RUNNER_TEMP 'Falcon_Ai_Setup.exe'
+          if (-not (Test-Path $exe)) { throw 'Installer missing from release' }
+      - name: Install, then invoke exact updater helper to reinstall and relaunch
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Join-Path $env:RUNNER_TEMP 'Falcon_Ai_Setup.exe'
+          $p = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw 'Initial installation failed' }
+          $app = Join-Path $env:LOCALAPPDATA 'Programs\Falcon Ai\Falcon Ai.exe'
+          $helper = Join-Path $env:LOCALAPPDATA 'Programs\Falcon Ai\_internal\app_update_restart.ps1'
+          if (-not (Test-Path $app) -or -not (Test-Path $helper)) { throw 'Installed app or update helper missing' }
+          $cache = Join-Path $env:LOCALAPPDATA 'FalconAI\installer_updates\falcon_ai_ci'
+          New-Item -ItemType Directory -Force -Path $cache | Out-Null
+          Copy-Item $setup (Join-Path $cache 'Falcon_Ai_Setup.exe') -Force
+          $marker = Join-Path $env:LOCALAPPDATA 'FalconAI\ci_keep_data.txt'
+          'Preserve user data during app update' | Set-Content $marker
+          $log = Join-Path $env:LOCALAPPDATA 'FalconAI\logs\app_installer_update.log'
+          if (Test-Path $log) { Remove-Item $log -Force }
+          $installed = Start-Process -FilePath 'powershell.exe' -ArgumentList @(
+             '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',
+             '-File', ('"' + $helper + '"'),
+             '-WaitPid','999999',
+             '-Installer',('"' + (Join-Path $cache 'Falcon_Ai_Setup.exe') + '"'),
+             '-AppExe',('"' + $app + '"')) -Wait -PassThru
+          if ($installed.ExitCode -ne 0) {
+            if (Test-Path $log) { Get-Content $log -Tail 30 }
+            throw ('Detached helper exited with code ' + $installed.ExitCode)
+          }
+          if (-not (Test-Path $marker)) { throw 'User settings directory was deleted during app update' }
+          if (-not (Test-Path $log)) { throw 'Updater did not write event log' }
+          $logText = Get-Content $log -Raw
+          Write-Host 'REAL UPDATE HELPER LOG:'
+          Write-Host $logText
+          if (-not $logText.Contains('Installer exit code 0')) { throw 'Installer did not finish cleanly' }
+          if (-not $logText.Contains('Launched installed Falcon Ai executable')) { throw 'Newly installed app was not launched' }
+          Write-Host 'PASS: verified installer executed, local data preserved, installed Falcon Ai EXE relaunched'
