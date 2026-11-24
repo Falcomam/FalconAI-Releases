@@ -1,0 +1,107 @@
+name: Validate Falcon Ai safe project revisions (development only)
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packaging/project_revision.py"
+      - "packaging/prepare_project_revision_candidate.py"
+      - "packaging/tests/test_project_revision.py"
+      - ".github/workflows/validate-project-revision-candidate.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-revision-and-stage:
+    runs-on: windows-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Safety and regression test suites
+        shell: pwsh
+        run: |
+          foreach ($t in @(
+            'test_project_revision.py',
+            'test_developer_workspace.py',
+            'test_developer_chat.py',
+            'test_html_quality.py',
+            'test_message_copy.py',
+            'test_command_palette.py')) {
+            python -m unittest discover -s packaging/tests -p $t -v
+            if ($LASTEXITCODE -ne 0) { throw "Developer regression failed: $t" }
+          }
+      - name: Stage combined candidate and compile
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python -m pip install "Pillow>=11.0"
+          if ($LASTEXITCODE -ne 0) { throw 'Pillow install failed' }
+          foreach ($patch in @('v13.6','v13.6.1','v13.6.2','v13.6.3','v13.6.4','v13.6.5')) {
+            python "patches/$patch/apply.py"
+            if ($LASTEXITCODE -ne 0) { throw "Base patch failed $patch" }
+          }
+          foreach ($script in @(
+            'packaging/prepare.py','packaging/prepare_icon_release.py',
+            'packaging/prepare_engine_candidate.py',
+            'packaging/prepare_single_chat_candidate.py',
+            'packaging/prepare_v138_release.py',
+            'packaging/prepare_copy_reply_candidate.py',
+            'packaging/prepare_command_palette_candidate.py',
+            'packaging/prepare_web_quality_candidate.py',
+            'packaging/prepare_project_revision_candidate.py')) {
+            python $script
+            if ($LASTEXITCODE -ne 0) { throw "Source stage failed $script" }
+          }
+          python -m compileall -q build/Falcon_Ai_Revision_Candidate
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate compile failed' }
+      - name: Integrated chat routing and revision safety
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import sys, tempfile
+          from unittest.mock import patch
+          target=Path('build/Falcon_Ai_Revision_Candidate')
+          sys.path.insert(0,str(target.resolve()))
+          import developer_chat as chat, developer_workspace as workspace
+          import project_revision as revision
+          assert chat.route('/project edit lostfalcon update the homepage') == (
+              'project_edit',('lostfalcon','update the homepage'))
+          assert chat.route('/project diff') == ('project_diff','')
+          assert chat.route('/project rollback lostfalcon abcdef') == (
+              'project_rollback',('lostfalcon','abcdef'))
+          assert chat.route('/project approve') == ('project_approve','')
+          assert chat.route('/project reject') == ('project_reject','')
+          assert '/project edit ' in (target/'command_palette.py').read_text(encoding='utf-8')
+          assert 'project_revision as revisions' in (target/'developer_chat.py').read_text(encoding='utf-8')
+          assert 'message_copy.attach_copy_reply' in (target/'falcon.py').read_text(encoding='utf-8')
+          assert 'command_palette.EntryController' in (target/'falcon.py').read_text(encoding='utf-8')
+          assert (target/'RELEASE_VERSION.txt').read_text(encoding='utf-8').strip()=='13.8.0'
+          with tempfile.TemporaryDirectory() as t:
+              root=Path(t)/'developer_projects'
+              root.mkdir()
+              old={'name':'website','kind':'website',
+                   'files':{'index.html':'<!doctype html><html><head><meta charset="UTF-8"><title>Falcon</title></head><body>Old</body></html>'}}
+              workspace.save_approved(old,workspace.review_proposal(old)['fingerprint'],workspace=root)
+              baseline=revision.load_project('website',workspace=root)
+              new={'name':'website','kind':'website',
+                   'files':{'index.html':old['files']['index.html'].replace('Old','New')}}
+              diff=revision.review_revision(baseline,new)
+              assert diff['changed']==('index.html',)
+              assert '-<!doctype html>' in diff['diff']
+              assert 'New' in diff['diff']
+              # No actual source file should change until exact review digest approved.
+              assert (root/'website'/'index.html').read_text()==old['files']['index.html']
+              with patch.object(revision,'WORKSPACE',root,create=True):
+                  pass
+              result=revision.save_revision_approved(baseline,new,diff['new_fingerprint'],workspace=root)
+              assert result['executed'] is False
+              assert (root/'website'/'index.html').read_text()==new['files']['index.html']
+              restored=revision.rollback_revision('website',result['backup_id'],workspace=root)
+              assert restored['executed'] is False
+              assert (root/'website'/'index.html').read_text()==old['files']['index.html']
+          print('PASS: single-chat project revision diff, exact approval, saved backup and rollback')
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw 'Integrated revision assertions failed' }
