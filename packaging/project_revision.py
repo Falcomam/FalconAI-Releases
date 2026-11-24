@@ -257,18 +257,33 @@ def rollback_revision(name, backup_id, *, workspace=projects.WORKSPACE):
         raise projects.ProjectError("Backup metadata unreadable") from exc
     if record.get("name") != name or not isinstance(record.get("changed"), list):
         raise projects.ProjectError("Backup does not match project")
-    _verify_current(name, record.get("new_fingerprint"), workspace)
+    current = _verify_current(name, record.get("new_fingerprint"), workspace)
     project = _guard_project(name, workspace)
     payloads = {}
+    if not record["changed"] or len(set(record["changed"])) != len(record["changed"]):
+        raise projects.ProjectError("Backup has duplicate or missing changed files")
+    original_plan = {
+        "name": current["plan"]["name"], "kind": current["plan"]["kind"],
+        "files": dict(current["plan"]["files"]),
+    }
     for path in record["changed"]:
         target = project.joinpath(*projects._check_path(path))
         backed = base.joinpath(*projects._check_path(path))
-        if projects._reparse(backed) or not backed.is_file() or projects._reparse(target):
+        if path not in original_plan["files"] or projects._reparse(backed) or \
+                not backed.is_file() or projects._reparse(target):
             raise projects.ProjectError("Backup contents are unsafe")
         raw = backed.read_bytes()
         if len(raw) > projects.MAX_BYTES_PER_FILE:
             raise projects.ProjectError("Backup contains oversized data")
+        try:
+            original_plan["files"][path] = raw.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise projects.ProjectError("Backup has invalid UTF-8") from exc
         payloads[path] = raw
+    # Check the entire *future restored project* before replacing anything.
+    # A corrupted or modified backup must never overwrite working user files.
+    if _snapshot_fingerprint(original_plan) != record.get("base_fingerprint"):
+        raise projects.ProjectError("Backup integrity check failed; no files restored")
     for path, raw in payloads.items():
         target = project.joinpath(*projects._check_path(path))
         temp = target.parent / (".falcon-rollback-" + uuid.uuid4().hex + ".tmp")
