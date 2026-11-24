@@ -8,7 +8,8 @@
 - Expanded review to validate TOML syntax and report lines added/removed. Parsing source is not executing tests or certifying code safety.
 - Added `packaging/self_improve_test_plan.py` to produce inert, fingerprint-linked test-gate descriptions. The plan never executes generated code or installs dependencies. Dynamic tests are specifically marked as requiring isolated execution and explicit approval.
 - Added Windows CI tests for source reader, live rechecks, syntax checks and inert test plans. Earlier source-reader Windows validation passed (run 45504969427) and TOML review suite passed (run 45505116775). Verify the latest combined run status separately before declaring all changes tested.
-- **Next:** trusted pinned checkout verification, explicit test approval UI, sandboxed worker with cancellation and bounded logs, then a complete frozen EXE and installer integration run. Keep all of this development-only until those gates pass.
+- **New pinned-source validation:** `read_pinned_snapshot` checks caller-provided SHA-256 digests against byte-exact checkout contents; the review bridge exposes pinned prepare/recheck methods. Digests must come from independently trusted CI metadata, **never** from the model. The inert test-plan builder now requires these pinned digests.
+- **Next:** independently verify source manifest provenance, explicit test approval UI, sandboxed worker with cancellation and bounded logs, then a complete frozen EXE and installer integration run. Keep all of this development-only until those gates pass.
 
 ## Verified v13.9.1 user acceptance and next self-improvement work (2026-11-24)
 
