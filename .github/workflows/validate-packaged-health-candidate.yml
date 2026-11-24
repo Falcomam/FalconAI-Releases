@@ -78,7 +78,7 @@ jobs:
           assert (target/"RELEASE_VERSION.txt").read_text().strip()=="13.9.0"
           assert "sys.modules['diagnostics'] = packaged_diagnostics" in entry
           assert "--falcon-diagnostics-self-test" in entry
-          assert "legacy source-file Docker Improve" in improve
+          assert "source-file Docker Improve feature" in improve
           assert "source-file self-upgrade is unavailable" in upgrade.lower()
           assert "Source-file self-upgrade" in upgrade
           assert "Falcon Ai.exe" in diagnostics and "app_update_restart.ps1" in diagnostics
