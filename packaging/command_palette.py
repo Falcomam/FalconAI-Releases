@@ -24,6 +24,8 @@ GROUPS = (
         Command("Start local Ollama", "/engine start"),
         Command("Choose installed coding model", "/engine use-code "),
         Command("Show selected coding model", "/engine coding"),
+        Command("Gaming Mode ON (pause AI and release Ollama VRAM)", "/engine gaming on"),
+        Command("Gaming Mode OFF (resume AI)", "/engine gaming off"),
     )),
     ("Coding & Projects", (
         Command("Create a website", "/project website "),
