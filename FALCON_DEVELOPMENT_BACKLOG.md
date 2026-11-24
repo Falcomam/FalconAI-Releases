@@ -21,7 +21,7 @@
 - **Next integration gate:** design a bounded trusted source reader and explicit GUI review flow, then separate permission-gated isolated tests/builds; no self-installation or unrestricted code execution. Keep these components off the packaged runtime until full Windows release gates pass.
 
 
-**User direction:** Work in substantial, tested batches. Stay inside ONE Falcon Ai and ONE main chat window. Don't release or notify for tiny progress. Let the verified-test-ready release watcher announce an actual major Windows update. **Latest verified release: v13.9.0 (2026-11-24); user's installed version may still be v13.8.0 until updated.**
+**User direction:** Work in substantial, tested batches. Stay inside ONE Falcon Ai and ONE main chat window. Don't release or notify for tiny progress. Let the verified-test-ready release watcher announce an actual major Windows update. **Latest verified release: v13.9.1 (2026-11-24); user confirmed installation and 13/13 diagnostics.**
 
 ## Latest completed bundle: Falcon Ai V13.9.0 — released, Windows verified
 
@@ -32,13 +32,13 @@
 - GitHub Windows CI passed source regression, frozen EXE smoke, clean install, v13.8.0 -> v13.9.0 installer upgrade/relaunch and preserved user data. **Do not mistake this for user-hardware acceptance testing.**
 - Next development work is post-v13.9.0 and must remain development-only until a new substantial tested package is released. Never rewrite v13.9.0 GitHub Release assets.
 
-## Frozen-EXE diagnostic mismatch from user V13.9.0 report (2026-11-24)
+## Frozen-EXE diagnostic mismatch from user V13.9.0 report (2026-11-24; fixed in V13.9.1)
 
 - **Confirmed user report:** Installed Falcon V13.9.0 GUI starts, but legacy `diagnostics.py` (carried forward from V13.5) checks 11 loose `.py` files plus `START_HERE.bat`/`ROLLBACK_LAST_UPDATE.bat`, reporting 0/13 despite a valid frozen Windows installation. Two Improve runs were blocked and installed no patch.
 - **Post-release development fix:** `packaging/packaged_diagnostics.py` checks 11 bundled import loaders plus the installed `Falcon Ai.exe` and `app_update_restart.ps1` instead. Report records its scope, and existing Copy Report code still recognizes `present` statuses.
 - **Safety:** `packaging/prepare_packaged_health_candidate.py` overrides the legacy diagnostics module **only in frozen app entry**, preserves source legacy behavior, and blocks the old source-file self-upgrader's auto/run/install/rollback against packaged EXEs. Improve must say it is unsupported rather than pretending to modify an EXE or attempting to overwrite bundled files. Existing user data is untouched.
 - **Windows frozen EXE smoke PASS:** [health candidate Windows tests, including frozen Improve guard](https://github.com/Falcomam/FalconAI-Releases/actions/runs/45501935842) verify actual packaged self-check writes **13/13 present** statuses, not only source-level mocks. The separate guard regression test is also included in later validation.
-- **NOT RELEASED OR INSTALLED:** Remains a development candidate for a future fully gated installer release. The V13.9.0 user can temporarily toggle Auto Improve OFF to stop repeated legacy checks while continuing to use normal chat and Developer Mode. A true auto-improve model for bundled binaries would need a separately authorized build/test/release workflow.
+- **Released in V13.9.1 and confirmed by user:** Installed self-check now reports 13/13. Legacy EXE source rewriting remains blocked by design. Future self-improvement requires an approved test/build/release pipeline.
 
 ## Post-v13.9.0 tested development: read-only source search + minimized update PowerShell
 
