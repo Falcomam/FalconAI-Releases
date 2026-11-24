@@ -1,5 +1,6 @@
 """Source snapshot loader never executes, writes or follows redirected paths."""
 from pathlib import Path
+import hashlib
 import sys
 import tempfile
 import unittest
@@ -44,6 +45,29 @@ class SourceSnapshotTests(unittest.TestCase):
             bridge.verify_from_checkout(
                 changes, trusted_checkout=self.root,
                 reviewed_fingerprint=reviewed["fingerprint"])
+
+    def test_pinned_snapshot_accepts_exact_digest_and_rejects_mismatch(self):
+        before = (self.root / "packaging" / "engine.py").read_bytes()
+        digest = hashlib.sha256(before).hexdigest()
+        path = "packaging/engine.py"
+        pinned = snapshots.read_pinned_snapshot(self.root, {path: digest})
+        self.assertEqual(pinned[path].encode("utf-8"), before)
+        changes = {path: {"before": pinned[path],
+                          "after": "def speed():\n    return 2\n"}}
+        review = bridge.prepare_pinned_from_checkout(
+            changes, trusted_checkout=self.root, trusted_sha256={path: digest})
+        result = bridge.verify_pinned_from_checkout(
+            changes, trusted_checkout=self.root, trusted_sha256={path: digest},
+            reviewed_fingerprint=review["fingerprint"])
+        self.assertTrue(result["source_snapshot_verified"])
+        with self.assertRaisesRegex(proposals.ProposalError, "digest mismatch"):
+            snapshots.read_pinned_snapshot(self.root, {path: "0" * 64})
+        with self.assertRaises(proposals.ProposalError):
+            snapshots.read_pinned_snapshot(self.root, {path: "untrusted"})
+        with self.assertRaises(proposals.ProposalError):
+            bridge.prepare_pinned_from_checkout(
+                changes, trusted_checkout=self.root,
+                trusted_sha256={"unrelated.py": digest})
 
     def test_unknown_checkout_without_marker_rejected(self):
         (self.root / snapshots.MARKER).unlink()
