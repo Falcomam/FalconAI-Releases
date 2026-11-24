@@ -1,0 +1,89 @@
+name: Validate Falcon Ai saved project browsing (development only)
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packaging/project_browser.py"
+      - "packaging/prepare_project_browser_candidate.py"
+      - "packaging/tests/test_project_browser.py"
+      - "packaging/tests/test_project_browser_chat.py"
+      - ".github/workflows/validate-project-browser-candidate.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-project-browser:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test project browsing and existing approvals
+        shell: pwsh
+        run: |
+          foreach ($t in @(
+            'test_project_browser.py',
+            'test_project_revision.py',
+            'test_developer_workspace.py',
+            'test_developer_chat.py',
+            'test_html_quality.py',
+            'test_message_copy.py',
+            'test_command_palette.py')) {
+            python -m unittest discover -s packaging/tests -p $t -v
+            if ($LASTEXITCODE -ne 0) { throw "Failed test suite $t" }
+          }
+      - name: Stage entire unified Falcon source and compile
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python -m pip install "Pillow>=11.0"
+          if ($LASTEXITCODE -ne 0) { throw 'Pillow install failed' }
+          foreach ($patch in @('v13.6','v13.6.1','v13.6.2','v13.6.3','v13.6.4','v13.6.5')) {
+            python "patches/$patch/apply.py"
+            if ($LASTEXITCODE -ne 0) { throw "Base patch failed $patch" }
+          }
+          foreach ($script in @(
+            'packaging/prepare.py',
+            'packaging/prepare_icon_release.py',
+            'packaging/prepare_engine_candidate.py',
+            'packaging/prepare_single_chat_candidate.py',
+            'packaging/prepare_v138_release.py',
+            'packaging/prepare_copy_reply_candidate.py',
+            'packaging/prepare_command_palette_candidate.py',
+            'packaging/prepare_web_quality_candidate.py',
+            'packaging/prepare_project_revision_candidate.py',
+            'packaging/prepare_project_browser_candidate.py')) {
+            python $script
+            if ($LASTEXITCODE -ne 0) { throw "Candidate staging failed: $script" }
+          }
+          python -m compileall -q build/Falcon_Ai_Browser_Candidate
+          if ($LASTEXITCODE -ne 0) { throw 'Combined candidate syntax failed' }
+          @'
+          from pathlib import Path
+          target=Path('build/Falcon_Ai_Browser_Candidate')
+          old=Path('build/Falcon_Ai_App_V13_8_0')
+          gui=(target/'falcon.py').read_text(encoding='utf-8')
+          chat=(target/'developer_chat.py').read_text(encoding='utf-8')
+          command=(target/'command_palette.py').read_text(encoding='utf-8')
+          assert 'message_copy.attach_copy_reply(' in gui
+          assert 'command_palette.EntryController(' in gui
+          assert 'self._list_saved()' in chat and 'self._open_saved(payload)' in chat
+          assert 'browser.show_saved_file(' in chat
+          assert 'project_revision as revisions' in chat
+          assert 'import html_quality' in (target/'developer_workspace.py').read_text(encoding='utf-8')
+          assert '/project list' in command and '/project open ' in command
+          assert 'project_browser' not in (old/'developer_chat.py').read_text(encoding='utf-8')
+          assert (old/'RELEASE_VERSION.txt').read_text(encoding='utf-8').strip()=='13.8.0'
+          assert (target/'RELEASE_VERSION.txt').read_text(encoding='utf-8').strip()=='13.8.0'
+          print('PASS: read-only project list/open/show, single chat, version unchanged')
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw 'Combined browser integration assertions failed' }
+      - name: Test single-chat project browsing and existing revisions
+        shell: pwsh
+        run: |
+          python -m unittest discover -s packaging/tests -p test_project_revision_chat.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'Project revisions regression failed' }
+          python -m unittest discover -s packaging/tests -p test_project_browser_chat.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'Saved project browser chat acceptance failed' }
