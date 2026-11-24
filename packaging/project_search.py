@@ -20,8 +20,14 @@ def find_source(name, needle, expected_fingerprint, *,
     Only use after /project open has captured a fingerprint. Return no source
     beyond approved project files. This function is pure/read-only.
     """
-    if not isinstance(needle, str) or not 2 <= len(needle.strip()) <= MAX_QUERY_CHARS:
-        raise projects.ProjectError("Search text must be 2–80 characters")
+    if not isinstance(needle, str):
+        raise projects.ProjectError("Search text must be text")
+    clean = needle.strip()
+    # Single Unicode symbols such as 🦅 are useful source search terms;
+    # ASCII single-character searches are deliberately too broad.
+    if not clean or len(clean) > MAX_QUERY_CHARS or (
+            len(clean) == 1 and ord(clean) < 128):
+        raise projects.ProjectError("Search text must be 2–80 characters or one Unicode symbol")
     if "\x00" in needle or "\r" in needle or "\n" in needle:
         raise projects.ProjectError("Search text must be a single line")
     if not isinstance(expected_fingerprint, str) or len(expected_fingerprint) != 64:
