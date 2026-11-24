@@ -1,5 +1,15 @@
 # Falcon Ai — Consolidated development backlog (2026-11-24)
 
+## Current self-improvement development sprint — 2026-11-24
+
+- The review-only source proposal gate and SHA-256 baseline bridge passed Windows regression tests (run 45504551336).
+- Added `packaging/self_improve_source_snapshot.py`: bounded reads of explicitly named source files from a caller-selected development checkout, with path/size checks, reparse-point/symlink refusal, inode checks and byte-exact UTF-8 decoding. It does **not** prove checkout identity and must not be pointed at a model-selected path or the installed app.
+- Added `prepare_from_checkout` and `verify_from_checkout` in the review bridge. It re-reads the source on verification and rejects stale changes. Existing Falcon's installed EXE is unchanged.
+- Expanded review to validate TOML syntax and report lines added/removed. Parsing source is not executing tests or certifying code safety.
+- Added `packaging/self_improve_test_plan.py` to produce inert, fingerprint-linked test-gate descriptions. The plan never executes generated code or installs dependencies. Dynamic tests are specifically marked as requiring isolated execution and explicit approval.
+- Added Windows CI tests for source reader, live rechecks, syntax checks and inert test plans. Earlier source-reader Windows validation passed (run 45504969427) and TOML review suite passed (run 45505116775). Verify the latest combined run status separately before declaring all changes tested.
+- **Next:** trusted pinned checkout verification, explicit test approval UI, sandboxed worker with cancellation and bounded logs, then a complete frozen EXE and installer integration run. Keep all of this development-only until those gates pass.
+
 ## Verified v13.9.1 user acceptance and next self-improvement work (2026-11-24)
 
 - User installed v13.9.1 and supplied a support report showing **13/13 packaged diagnostics passed**. Auto Improve correctly reports that legacy source-file upgrades are blocked for the installed EXE; this is an intentional safety restriction, not a crash.
