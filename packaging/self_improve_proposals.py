@@ -39,23 +39,23 @@ def _path(value):
     return value
 
 
-def _source(value, path):
+def _source(value, path, *, validate_syntax=True):
     if not isinstance(value, str) or "\x00" in value:
         raise ProposalError("Source must be plain UTF-8 text")
     raw = value.encode("utf-8")
     if len(raw) > MAX_FILE_BYTES:
         raise ProposalError("Source file exceeds size limit")
-    if path.lower().endswith(".py"):
+    if validate_syntax and path.lower().endswith(".py"):
         try:
             ast.parse(value, filename=path)
         except SyntaxError as exc:
             raise ProposalError(f"Python syntax error in {path}, line {exc.lineno}") from exc
-    if path.lower().endswith(".json"):
+    if validate_syntax and path.lower().endswith(".json"):
         try:
             json.loads(value)
         except ValueError as exc:
             raise ProposalError(f"Invalid JSON in {path}") from exc
-    if path.lower().endswith(".toml"):
+    if validate_syntax and path.lower().endswith(".toml"):
         try:
             tomllib.loads(value)
         except tomllib.TOMLDecodeError as exc:
@@ -99,7 +99,7 @@ def review(changes):
         if not isinstance(item, dict) or set(item) != {"before", "after"}:
             raise ProposalError("Each file requires exactly before and after")
         before, after = item["before"], item["after"]
-        original, replacement = _source(before, path), _source(after, path)
+        # Broken historical source may be the reason for the repair. Only the\n        # replacement must pass static syntax validation. Original bytes are\n        # still bounded and pinned to a trusted checkout by the review bridge.\n        original, replacement = _source(before, path, validate_syntax=False), _source(after, path)
         total += len(original) + len(replacement)
         if total > MAX_TOTAL_BYTES:
             raise ProposalError("Proposal exceeds total size limit")
