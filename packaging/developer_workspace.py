@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import html_quality
 
 BASE = Path(os.getenv("LOCALAPPDATA") or Path.home()) / "FalconAI"
 WORKSPACE = BASE / "developer_projects"
@@ -126,6 +127,12 @@ def review_proposal(plan):
             except ValueError as exc:
                 raise ProjectError(f"Invalid JSON in {path}") from exc
         clean[path] = contents
+    quality_warnings = []
+    if kind == "website":
+        try:
+            quality_warnings = html_quality.check_website(clean)
+        except html_quality.WebsiteQualityError as exc:
+            raise ProjectError("Website HTML validation failed: " + str(exc)) from exc
     canonical = json.dumps(
         {"name": name, "kind": kind, "files": clean},
         ensure_ascii=False, sort_keys=True, separators=(",", ":"),
@@ -138,6 +145,7 @@ def review_proposal(plan):
         "byte_count": total_bytes,
         "fingerprint": hashlib.sha256(canonical).hexdigest(),
         "execution_allowed": False,
+        "quality_warnings": tuple(quality_warnings),
     }
 
 
