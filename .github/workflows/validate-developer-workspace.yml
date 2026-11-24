@@ -1,0 +1,37 @@
+name: Validate Falcon Ai Developer Mode workspace (development only)
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packaging/developer_workspace.py"
+      - "packaging/tests/test_developer_workspace.py"
+      - ".github/workflows/validate-developer-workspace.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  safe-project-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and run Developer Mode safety tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile packaging/developer_workspace.py
+          python -m unittest discover -s packaging/tests -p test_developer_workspace.py -v
+          python - <<'PY'
+          from pathlib import Path
+          text=Path('packaging/developer_workspace.py').read_text(encoding='utf-8')
+          assert 'subprocess' not in text
+          assert 'os.system' not in text
+          assert 'exec(' not in text
+          assert 'eval(' not in text
+          assert 'def save_approved(' in text
+          assert 'approved_fingerprint' in text
+          print('PASS: generated code never executes and approval is mandatory')
+          PY
