@@ -1,0 +1,72 @@
+name: Validate Falcon Ai Tab completion and Commands menu (development)
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packaging/command_palette.py"
+      - "packaging/prepare_command_palette_candidate.py"
+      - "packaging/tests/test_command_palette.py"
+      - ".github/workflows/validate-command-palette-candidate.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-command-completion:
+    runs-on: windows-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test Tab, Shift Tab, suggestions, and inert menu actions
+        shell: pwsh
+        run: |
+          python -m unittest discover -s packaging/tests -p test_command_palette.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'Tab completion tests failed' }
+          python -m unittest discover -s packaging/tests -p test_message_copy.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'Copy reply regression failed' }
+      - name: Stage integrated single-chat development candidate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python -m pip install "Pillow>=11.0"
+          if ($LASTEXITCODE -ne 0) { throw 'Pillow install failed' }
+          foreach ($patch in @('v13.6','v13.6.1','v13.6.2','v13.6.3','v13.6.4','v13.6.5')) {
+            python "patches/$patch/apply.py"
+            if ($LASTEXITCODE -ne 0) { throw "Previous patch $patch failed" }
+          }
+          foreach ($script in @(
+            'packaging/prepare.py',
+            'packaging/prepare_icon_release.py',
+            'packaging/prepare_engine_candidate.py',
+            'packaging/prepare_single_chat_candidate.py',
+            'packaging/prepare_v138_release.py',
+            'packaging/prepare_copy_reply_candidate.py',
+            'packaging/prepare_command_palette_candidate.py')) {
+            python $script
+            if ($LASTEXITCODE -ne 0) { throw "Staging failed: $script" }
+          }
+          python -m compileall -q build/Falcon_Ai_CommandPalette_Candidate
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate Python compile failed' }
+          @'
+          from pathlib import Path
+          prior=Path('build/Falcon_Ai_App_V13_8_0')
+          candidate=Path('build/Falcon_Ai_CommandPalette_Candidate')
+          assert (prior/'RELEASE_VERSION.txt').read_text().strip()=='13.8.0'
+          assert (candidate/'RELEASE_VERSION.txt').read_text().strip()=='13.8.0'
+          old=(prior/'falcon.py').read_text(encoding='utf-8')
+          gui=(candidate/'falcon.py').read_text(encoding='utf-8')
+          assert 'self.command_picker = command_palette.EntryController(' in gui
+          assert "self.entry.bind('<Return>', lambda e: self.send())" in gui
+          assert "text='⌘ Commands ▾'" in gui
+          assert "command=lambda command=item.insert:" in gui
+          assert 'self.command_picker.insert(command)' in gui
+          assert "message_copy.attach_copy_reply(" in gui
+          assert 'self.dev_chat.dispatch(prompt)' in gui
+          assert 'self.dev_chat.stop()' in gui
+          assert 'command_palette' not in old
+          assert (candidate/'command_palette.py').is_file()
+          print('PASS: command completion + copy reply in single chat; prior release unchanged')
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw 'Source integration assertions failed' }
