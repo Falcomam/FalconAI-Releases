@@ -5,7 +5,7 @@ This is for **after an official release is published**, not development candidat
 ## Safe update
 1. Open the installed Falcon Ai V13.7.1.
 2. Use its **Updates > Check for updates** menu and review the release notes.
-3. Approve the normal signed-digest-verified installer update. It should close Falcon, install, and reopen.
+3. Approve the normal SHA256-verified installer update. It should close Falcon, install, and reopen.
 4. Verify the purple icon and **V13.8.0** title. Existing local history/settings must remain.
 5. If the app fails to reopen, do not reinstall repeatedly. Copy the support report and update log from LOCALAPPDATA/FalconAI/logs/app_installer_update.log.
 
