@@ -50,7 +50,11 @@ jobs:
              '-File', ('"' + $helper + '"'),
              '-WaitPid','999999',
              '-Installer',('"' + (Join-Path $cache 'Falcon_Ai_Setup.exe') + '"'),
-             '-AppExe',('"' + $app + '"')) -Wait -PassThru
+             '-AppExe',('"' + $app + '"')) -PassThru
+          # Unlike Start-Process -Wait, Wait-Process waits only for the helper PID.
+          # The new Falcon GUI intentionally remains running afterward.
+          Wait-Process -Id $installed.Id -Timeout 90 -ErrorAction Stop
+          $installed.Refresh()
           if ($installed.ExitCode -ne 0) {
             if (Test-Path $log) { Get-Content $log -Tail 30 }
             throw ('Detached helper exited with code ' + $installed.ExitCode)
