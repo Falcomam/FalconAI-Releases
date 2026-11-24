@@ -59,7 +59,7 @@ replace_exact(RUNTIME / "app_updates.py",
               "CURRENT_VERSION = (13, 9, 0)")
 replace_exact(RUNTIME / "app_updates.py",
               "FalconAi-WindowsUpdater/13.8",
-              "FalconAi-WindowsUpdater/13.9")
+              "FalconAi-WindowsUpdater/13.9", count=2)
 replace_exact(RUNTIME / "app_entry.py",
               "if app_updates.CURRENT_VERSION != (13, 8, 0):",
               "if app_updates.CURRENT_VERSION != (13, 9, 0):")
