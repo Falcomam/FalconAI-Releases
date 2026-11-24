@@ -15,3 +15,7 @@
 2. Optional local model selection (Qwen or installed Llama model) without changing PC safety policy.
 3. First Developer Mode: plain-English multi-file project proposals, preview, explicit user approval before writing to a confined local workspace, syntax-only checks; no arbitrary code execution.
 4. Diagnostics and end-to-end packaged Windows installer update/relaunch tests.
+
+## One Falcon Ai, one chat window (user preference, 2026-11-24)
+
+Treat **Falcon Ai's existing main chat** as the single interface for all capabilities. Users ask naturally for coding projects, Ollama health/model changes, PC tasks, research, and future functions in that same conversation. Developer Mode should use inline chat project proposals, previews, approval and rejection commands rather than spawning a separate chat, Developer Studio window, or multiple assistants. Keep existing Tools/Updates menus for optional shortcuts only; their actions should feed into the same main chat. Separate opt-in Mini Monitor is a utility, not an additional AI. Avoid modal popups except security-critical explicit approval or essential settings. Preserve existing STOP and permission boundaries. Do not publish the proposed separate-window Developer Studio prototype.
