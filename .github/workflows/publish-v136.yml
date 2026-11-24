@@ -1,0 +1,94 @@
+name: Falcon V13.6 — test and publish
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/publish-v136.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: falcon-v136-release
+  cancel-in-progress: false
+
+jobs:
+  verify-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out trusted release sources
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Python runtime
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Tk shared libraries for regression tests
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libtk8.6 libtcl8.6
+
+      - name: Reconstruct verified Falcon source and apply V13.6 patch
+        run: python patches/v13.6/apply.py
+
+      - name: Compile Falcon source
+        run: python -m compileall -q build/Falcon_AI_V13_6
+
+      - name: Run complete Falcon regression suite
+        working-directory: build/Falcon_AI_V13_6
+        run: python -m unittest discover -s tests -q
+
+      - name: Validate and package complete replacement release
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib, importlib, pathlib, sys, zipfile
+          app=pathlib.Path('build/Falcon_AI_V13_6')
+          assert (app/'RELEASE_VERSION.txt').read_text().strip()=='13.6.0'
+          sys.path.insert(0,str(app.resolve()))
+          import release_updates
+          assert release_updates.CURRENT_VERSION==(13,6,0)
+          out=pathlib.Path('dist')
+          out.mkdir()
+          archive=out/'Falcon_AI_Update.zip'
+          with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+              for f in sorted(app.rglob('*')):
+                  if not f.is_file() or any(p in ('.git','.venv','__pycache__','.pytest_cache') for p in f.parts) or f.suffix=='.pyc':
+                      continue
+                  z.write(f,'Falcon_AI_V13_6/'+f.relative_to(app).as_posix())
+          raw=archive.read_bytes()
+          release_updates.verify_archive(raw,(13,6,0))
+          digest=hashlib.sha256(raw).hexdigest()
+          (out/'SHA256SUMS.txt').write_text(digest+'  Falcon_AI_Update.zip\n')
+          (out/'RELEASE_NOTES.txt').write_text(
+              'Falcon AI V13.6 — Cipher-style local personality\n\n'
+              '- Relaxed friendly replies by default, without changing Falcon identity.\n'
+              '- Type /tone focused, /tone casual, /tone quiet or /tone status.\n'
+              '- The chosen tone stays on this PC and is not uploaded to GitHub.\n'
+              '- No new buttons or independent outside-AI privileges.\n'
+              '- Complete Python regression suite passed in GitHub Actions.\n'
+              '- Review and approve the verified update in Falcon V13.5.\n'
+              '- Windows installer/restart still needs real-PC verification.\n')
+          print('SAFE RELEASE PACKAGE:',len(raw),'bytes; SHA-256',digest)
+          PY
+
+      - name: Publish verified stable release
+        env:
+          GH_TOKEN: \${{ github.token }}
+        shell: bash
+        run: |
+          if gh release view v13.6.0 >/dev/null 2>&1; then
+            echo 'v13.6.0 already exists; refusing to overwrite published binaries'
+            exit 0
+          fi
+          gh release create v13.6.0 \
+            dist/Falcon_AI_Update.zip dist/SHA256SUMS.txt \
+            --title 'Falcon AI V13.6.0 — Cipher Personality' \
+            --notes-file dist/RELEASE_NOTES.txt \
+            --latest
