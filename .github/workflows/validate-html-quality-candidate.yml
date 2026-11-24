@@ -1,0 +1,97 @@
+name: Validate next Falcon bundled coding quality (development only)
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packaging/html_quality.py"
+      - "packaging/prepare_web_quality_candidate.py"
+      - "packaging/tests/test_html_quality.py"
+      - ".github/workflows/validate-html-quality-candidate.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-windows-quality:
+    runs-on: windows-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Static HTML, developer, chat UI regression unit tests
+        shell: pwsh
+        run: |
+          foreach ($t in @('test_html_quality.py','test_message_copy.py','test_command_palette.py','test_developer_workspace.py','test_developer_chat.py')) {
+            python -m unittest discover -s packaging/tests -p $t -v
+            if ($LASTEXITCODE -ne 0) { throw "Failed $t" }
+          }
+      - name: Reconstruct source and stage validated combined candidate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python -m pip install "Pillow>=11.0"
+          if ($LASTEXITCODE -ne 0) { throw 'Pillow setup failed' }
+          foreach ($patch in @('v13.6','v13.6.1','v13.6.2','v13.6.3','v13.6.4','v13.6.5')) {
+            python "patches/$patch/apply.py"
+            if ($LASTEXITCODE -ne 0) { throw "Patch failed $patch" }
+          }
+          foreach ($script in @(
+            'packaging/prepare.py','packaging/prepare_icon_release.py',
+            'packaging/prepare_engine_candidate.py',
+            'packaging/prepare_single_chat_candidate.py',
+            'packaging/prepare_v138_release.py',
+            'packaging/prepare_copy_reply_candidate.py',
+            'packaging/prepare_command_palette_candidate.py',
+            'packaging/prepare_web_quality_candidate.py')) {
+            python $script
+            if ($LASTEXITCODE -ne 0) { throw "Failed to stage: $script" }
+          }
+          python -m compileall -q build/Falcon_Ai_WebQuality_Candidate
+          if ($LASTEXITCODE -ne 0) { throw 'Staged candidate Python syntax failed' }
+      - name: Verify untrusted broken website rejected before approval
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import sys, tempfile
+          sys.path.insert(0, str(Path('build/Falcon_Ai_WebQuality_Candidate').resolve()))
+          import developer_workspace as dev
+          import developer_chat as chat
+          candidate=Path('build/Falcon_Ai_WebQuality_Candidate')
+          original=Path('build/Falcon_Ai_App_V13_8_0')
+          assert 'message_copy.attach_copy_reply(' in (candidate/'falcon.py').read_text(encoding='utf-8')
+          assert 'command_palette.EntryController(' in (candidate/'falcon.py').read_text(encoding='utf-8')
+          assert 'For websites, include index.html' in chat.SYSTEM
+          assert 'quality_warnings' in (candidate/'developer_workspace.py').read_text(encoding='utf-8')
+          assert 'import html_quality' in (candidate/'developer_workspace.py').read_text(encoding='utf-8')
+          assert 'import html_quality' not in (original/'developer_workspace.py').read_text(encoding='utf-8')
+          broken='<!DOCTYPE html><html><head><meta charset="UTF-\n<title>Wrong</title></head><body>Broken</body></html>'
+          p={'name':'broken_falcon','kind':'website','files':{'index.html':broken}}
+          with tempfile.TemporaryDirectory() as d:
+              dest=Path(d)/'generated'
+              try:
+                  dev.review_proposal(p)
+              except dev.ProjectError as e:
+                  assert 'Website quality check failed' in str(e), str(e)
+              else:
+                  raise AssertionError('Truncated meta tag incorrectly approved')
+              assert not dest.exists()
+              valid='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>OK</title></head><body><nav><a href="#missing">Link</a></nav></body></html>'
+              p['files']['index.html']=valid
+              review=dev.review_proposal(p)
+              assert 'quality_warnings' in review and '#missing' in review['quality_warnings'][0]
+              assert not dest.exists()
+              try:
+                  dev.save_approved(p, 'invalid-digest', workspace=dest)
+              except dev.ProjectError:
+                  pass
+              else:
+                  raise AssertionError('Invalid approval allowed')
+              assert not dest.exists()
+              result=dev.save_approved(p, review['fingerprint'], workspace=dest)
+              assert not result['executed'] and result['file_count']==1
+              assert (dest/'broken_falcon'/'index.html').read_text(encoding='utf-8')==valid
+          print('PASS: HTML quality gate and source review; no auto-execution, no bypassed approval')
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw 'Integrated safety/quality regression failed' }
