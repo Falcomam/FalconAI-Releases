@@ -89,22 +89,33 @@ def _infer_kind(files):
     raise projects.ProjectError("Cannot identify project kind; only Python, website and Fabric starters are editable")
 
 
+def _snapshot_fingerprint(plan):
+    """Canonical identity of already-existing source, including legacy bugs.
+
+    Existing V13.8 websites might have invalid HTML; users must be able to
+    ask Falcon to fix it without being blocked by the *new* HTML quality gate.
+    Newly proposed replacement files still pass full validation.
+    """
+    canonical = json.dumps(plan, ensure_ascii=False, sort_keys=True,
+                           separators=(",", ":")).encode("utf-8")
+    return _sha(canonical)
+
+
 def load_project(name, *, workspace=projects.WORKSPACE):
     """Capture a bounded, source-only snapshot of an existing project."""
     project = _guard_project(name, workspace)
     files = _read_files(project)
     kind = _infer_kind(files)
     plan = {"name": name, "kind": kind, "files": files}
-    snapshot = projects.review_proposal(plan)
-    return {"plan": plan, "fingerprint": snapshot["fingerprint"]}
+    return {"plan": plan, "fingerprint": _snapshot_fingerprint(plan)}
 
 
 def review_revision(base, new_plan):
     """Verify replacement from model uses EXACT same name/kind/file paths."""
     if not isinstance(base, dict) or "plan" not in base:
         raise projects.ProjectError("Missing original reviewed project snapshot")
-    original = projects.review_proposal(base["plan"])
-    if original["fingerprint"] != base.get("fingerprint"):
+    original = base["plan"]
+    if not isinstance(original, dict) or _snapshot_fingerprint(original) != base.get("fingerprint"):
         raise projects.ProjectError("Original project snapshot changed")
     proposed = projects.review_proposal(new_plan)
     if proposed["name"] != original["name"] or proposed["kind"] != original["kind"]:
@@ -124,7 +135,7 @@ def review_revision(base, new_plan):
             lineterm="\n", n=3))
     diff_text = "".join(lines)
     return {"proposal": proposed, "changed": changed, "diff": diff_text,
-            "base_fingerprint": original["fingerprint"],
+            "base_fingerprint": base["fingerprint"],
             "new_fingerprint": proposed["fingerprint"],
             "quality_warnings": proposed.get("quality_warnings", ())}
 
