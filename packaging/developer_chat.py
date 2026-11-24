@@ -14,6 +14,7 @@ import developer_workspace as projects
 import developer_generation
 import project_static_check
 import engine_manager
+import gaming_mode
 
 _PROJECT = re.compile(r"^/project(?:\s+(.*))?$", re.I | re.S)
 _ENGINE = re.compile(r"^/engine(?:\s+(.*))?$", re.I | re.S)
@@ -41,6 +42,7 @@ ENGINE_HELP = (
     "/engine use <installed_model_name>\n"
     "/engine use-code <installed_model_name>  •  /engine coding\n"
     "/engine start\n"
+    "/engine gaming on|off|status  (pause AI work while gaming)\n"
     "Models are only selected if already installed. Starting Ollama does not download models."
 )
 SYSTEM = (
@@ -144,6 +146,9 @@ class ChatFeatures:
         if result is None:
             return False
         action, payload = result
+        if gaming_mode.enabled() and action in ("project_new", "project_edit", "project_edit_small"):
+            self.say("Gaming Mode is ON. New AI project generation is paused to protect game performance. Type /engine gaming off to resume.")
+            return True
         if action == "engine":
             self._engine(payload)
         elif action == "project_new":
@@ -222,6 +227,58 @@ class ChatFeatures:
         low = command.casefold()
         if low in ("", "help"):
             self.say(ENGINE_HELP)
+            return
+        if low in ("gaming", "gaming status"):
+            self.say("Gaming Mode: " + ("ON — new local AI requests paused."
+                                      if gaming_mode.enabled() else "OFF.") +
+                     "\nUse /engine gaming on before playing, /engine gaming off afterward.")
+            return
+        if low == "gaming off":
+            if self.app.busy or self._running:
+                self.say("Press STOP or finish the current task before changing gaming mode.")
+                return
+            try:
+                gaming_mode.set_enabled(False)
+            except gaming_mode.GamingModeError as exc:
+                self.say(str(exc))
+                return
+            self.app.set_status("Gaming Mode OFF • Local AI allowed")
+            self.say("Gaming Mode OFF. Local AI work is allowed again. "
+                     "Ollama models load on demand; no GPU or game settings changed.")
+            return
+        if low == "gaming on":
+            if self.app.busy or self._running:
+                self.say("Press STOP or finish the current task before enabling gaming mode.")
+                return
+
+            def work(cancel):
+                # Pause first, then attempt to free VRAM. Even if Ollama is
+                # offline, the pause persists until the user turns it off.
+                gaming_mode.set_enabled(True)
+                chosen = (engine_manager.saved_chat_model(),
+                          engine_manager.saved_coding_model(), "qwen2.5vl:3b")
+                try:
+                    return gaming_mode.unload_falcon_models(chosen)
+                except gaming_mode.GamingModeError as exc:
+                    return {"warning": str(exc)}
+
+            def complete(result):
+                self.app.set_status("Gaming Mode ON • Local AI paused")
+                if "warning" in result:
+                    suffix = ("Could not confirm Ollama model unloading: " +
+                              result["warning"] + ". Check 'ollama ps' yourself.")
+                else:
+                    count = len(result["requested"])
+                    suffix = (
+                        f"Asked Ollama to unload {count} selected loaded model(s). " +
+                        ("Ollama confirmed none of Falcon's selected models remain loaded."
+                         if result["verified"] else
+                         "Model unloading could not be fully verified. Check 'ollama ps'.")
+                    )
+                self.say("Gaming Mode ON. New chat and project-generation requests "
+                         "are paused in the staged Falcon interface. " + suffix +
+                         " This does not guarantee game FPS and cannot pause other apps.")
+            self._launch("Entering Gaming Mode…", work, complete)
             return
         if low in ("status", "list", "coding"):
             def work(cancel):
