@@ -28,6 +28,7 @@ class ReviewSession:
         self._review_visible = False
         self._consent = False
         self._stopped = False
+        self._events = []
 
     @property
     def state(self):
@@ -55,6 +56,8 @@ class ReviewSession:
         self._nonce = secrets.token_urlsafe(24)
         self._review_visible = False
         self._consent = False
+        self._events.append({"event": "proposal_submitted",
+                             "fingerprint": self._fingerprint})
         return {"fingerprint": self._fingerprint, "state": self.state}
 
     def show_review(self):
@@ -69,6 +72,8 @@ class ReviewSession:
         complete = "[Preview truncated:" not in output
         self._review_visible = complete
         self._consent = False
+        self._events.append({"event": "review_displayed" if complete else "review_truncated",
+                             "fingerprint": self._fingerprint})
         return {"text": output, "fingerprint": self._fingerprint,
                 "review_token": self._nonce if complete else None,
                 "review_complete": complete, "state": self.state}
@@ -88,6 +93,9 @@ class ReviewSession:
             self._changes, trusted_checkout=self._root, trusted_sha256=self._pinned,
             reviewed_fingerprint=self._fingerprint)
         self._consent = True
+        self._events.append({"event": "test_consent_recorded",
+                             "fingerprint": self._fingerprint,
+                             "scope": "request_isolated_tests_only"})
         return {"fingerprint": verified["fingerprint"],
                 "state": self.state, "tests_executed": False,
                 "deployment_approved": False,
@@ -110,6 +118,12 @@ class ReviewSession:
         self._review_visible = False
         self._consent = False
         self._stopped = True
+        self._events.append({"event": "session_stopped",
+                             "consent_revoked": True})
         return {"state": "stopped", "tests_executed": False}
+
+    def audit(self):
+        """Return a defensive copy of metadata; never reveal review tokens/code."""
+        return tuple(dict(item) for item in self._events)
 
     reject = stop
