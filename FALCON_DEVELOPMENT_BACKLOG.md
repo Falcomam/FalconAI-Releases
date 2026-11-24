@@ -1,5 +1,37 @@
 # Falcon Ai — Consolidated development backlog (2026-11-24)
 
+## Falcon focused-edit and approval sprint — 2026-11-24
+
+**User direction:** substantial coding batches, one purple chat, no per-commit alerts or GitHub manual checking, preserve working installed Falcon V13.9.1 until a full trusted release.
+
+### Built and tested development features
+
+- **Independent coding model**: `/engine use-code <installed_model>` and `/engine coding`; installed-only selection, independent chat model settings, fallback when the coding model is unavailable. No model downloads or increased PC permissions.
+- **Bounded local model generation**: two attempts maximum, retry only invalid code/JSON proposals, one shared deadline, STOP checks, no source writes until reviewed. Project revisions retain a larger bounded token output budget.
+- **`/project check`** in one chat: read-only static diagnostics for pending source proposals or opened saved Falcon projects, fingerprint/stale-project checks, warnings for possible third-party imports and unsupported runtime validation. No source execution or dependency installation.
+- **Better STOP and source draft preservation**: owned busy flag clears on STOP, late callbacks are ignored, and an existing reviewed proposal survives failed replacement generation.
+- **Frozen staging integration**: helper modules copied into Windows candidate; project revision staging preserves new command routing; targeted source editing is staged in saved-project browser without replacing full project edits. Command palette exposes installed coding model and static checks, hides unsupported packaged-EXE self-patch shortcut.
+- **Targeted source edit path**: `project_targeted_edits.py` chooses relevant complete files from a trusted bounded saved-project snapshot, now scores filename and source-word overlap, includes all explicitly named files or fails clearly, asks Ollama for strict changed-files JSON only, rejects outside-selected existing file edits, merges all untouched files exactly, and submits a normal SHA-256 source diff to existing review/approval/backup/rollback machinery.
+- **Staged one-chat focused edits**: `/project edit-small <saved_name> <request>` available only in development candidate. Supports STOP, independent coding model, bounded retry, `/project diff`, explicit `/project approve`, backup ID and rollback. Windows acceptance tests cover no-write-before-approval and full backup/restore on temporary projects.
+- **Self-improvement review session**: pinned source hashes, nonce-bound review, all-page visibility before test consent, metadata-only bounded audit history, stale-check before each cached page, STOP cancels consent. Consent does not run tests and never approves an app update.
+- **Developer review CLI**: read-only bounded proposal/manifest JSON support and source diff/test planning, never executes or installs code.
+- **Repair broken originals**: validate proposed replacement Python/JSON/TOML without rejecting historically broken original source.
+
+### Evidence and release limits
+
+- Numerous source regressions passed on Windows and Linux; saved-project source staging and focused-edit chat with explicit backup/rollback passed Windows development CI.
+- An internal frozen-EXE, clean install and upgrade/relaunch/data-preservation run succeeded during this sprint. More recent focused-edit staging has separate source validation; a **fresh internal package validation is required** before release.
+- No new public installer/release tag was created. User-installed V13.9.1 stays untouched. These are **development source** features, not claims of installed capabilities.
+- Actual model-generated code execution, compiling arbitrary apps, running Fabric toolchains, networked dependency installs and autonomous Falcon EXE replacement remain **not implemented**. A future isolated worker will require explicit permission, verified sandbox boundaries, resource limits, STOP/cancellation and trustworthy build approvals.
+
+### Next milestones
+
+1. Verify final cross-platform targeted-edit and final internal Windows installer gates on the exact candidate SHA; repair failures before publishing any version.
+2. Strengthen focused edit validation for multiple files and project UI prompts; only ship when frozen runtime, clean install and prior-version upgrade/relaunch/data integrity tests pass.
+3. Build and independently security-test an explicit-approval resource-limited isolated project test worker (without modifying the live app).
+4. Extend packaging workflows for creating runnable standalone websites/Python apps/mod starters with accurate toolchain compatibility checks.
+5. Keep all functionality in one Falcon command center with safe review, STOP and one-click verified updates.
+
 ## Extended Falcon coding sprint — post-13.9.1 development (2026-11-24)
 
 **Release status:** All work below is in the public development source. The user's working V13.9.1 remains unchanged. Do not release, claim installed functionality, or hand over an installer until a separate versioned frozen EXE/clean install/upgrade/relaunch/data-retention release gate succeeds.
