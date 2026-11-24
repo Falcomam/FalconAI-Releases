@@ -31,6 +31,29 @@ class DeveloperWorkspaceTests(unittest.TestCase):
         self.assertEqual(len(result["fingerprint"]), 64)
         self.assertEqual(result["fingerprint"], dev.review_proposal(proposal())["fingerprint"])
 
+    def test_single_fenced_json_model_response_accepted(self):
+        raw = json.dumps(proposal(), ensure_ascii=False)
+        for fenced in ("```json\n" + raw + "\n```",
+                       "```JSON\r\n" + raw + "\r\n```",
+                       "```\n" + raw + "\n```"):
+            with self.subTest(fenced=fenced[:12]):
+                result = dev.parse_proposal(fenced)
+                self.assertEqual(result["name"], "test_project")
+                self.assertFalse(result["execution_allowed"])
+
+    def test_fenced_commentary_duplicate_keys_and_nan_rejected(self):
+        raw = json.dumps(proposal())
+        invalid = [
+            "Here is your code:\n```json\n" + raw + "\n```",
+            "```json\n" + raw + "\n``` extra commentary",
+            "```json\n" + raw + "\n```\n```json\n" + raw + "\n```",
+            '{"name":"one","name":"two","kind":"python","files":{"main.py":"pass"}}',
+            '{"name":"one","kind":"python","files":{"main.py":"pass"},"unusual":NaN}',
+        ]
+        for item in invalid:
+            with self.subTest(item=item[:30]), self.assertRaises(dev.ProjectError):
+                dev.parse_proposal(item)
+
     def test_saves_only_approved_new_project(self):
         with tempfile.TemporaryDirectory() as directory:
             p = proposal()
