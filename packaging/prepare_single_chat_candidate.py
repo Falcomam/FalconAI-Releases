@@ -16,7 +16,7 @@ if TARGET.exists():
     shutil.rmtree(TARGET)
 shutil.copytree(SOURCE, TARGET, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".venv"))
 for file in ("developer_chat.py", "developer_generation.py",
-             "developer_workspace.py", "html_quality.py"):
+             "developer_workspace.py", "project_static_check.py", "html_quality.py"):
     shutil.copy2(REPO / "packaging" / file, TARGET / file)
 
 
