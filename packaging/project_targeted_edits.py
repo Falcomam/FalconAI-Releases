@@ -34,6 +34,13 @@ def select_context(base, goal, *, max_chars=MAX_CONTEXT_CHARS, max_files=MAX_TAR
     if not isinstance(max_files, int) or not 1 <= max_files <= MAX_TARGET_FILES:
         raise projects.ProjectError("Unsafe target file count")
     names = tuple(sorted(plan["files"]))
+    explicit_paths = [path for path in names if path.casefold() in goal.casefold()]
+    if any(len(plan["files"][path]) > max_chars for path in explicit_paths):
+        raise projects.ProjectError(
+            "Requested source file is too large for this local coding context")
+    if len(explicit_paths) > max_files:
+        raise projects.ProjectError(
+            "Too many explicitly requested source files for the selected context")
     goal_words = set(WORD.findall(goal.casefold()))
     ranked = []
     for path in names:
