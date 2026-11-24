@@ -12,6 +12,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import tomllib
 import os
 from pathlib import Path
 import re
@@ -75,6 +76,23 @@ def _check_path(path):
     return tuple(parts)
 
 
+def _strict_json_loads(payload):
+    """Reject ambiguous duplicate keys and non-standard JSON constants."""
+    def unique_pairs(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("Duplicate JSON key")
+            result[key] = value
+        return result
+
+    def reject_constant(value):
+        raise ValueError("Non-standard JSON constant: " + value)
+
+    return json.loads(payload, object_pairs_hook=unique_pairs,
+                      parse_constant=reject_constant)
+
+
 def parse_proposal(raw):
     """Parse one bounded JSON object, optionally inside one exact JSON fence.
 
@@ -92,20 +110,8 @@ def parse_proposal(raw):
             raise ProjectError("Only one complete JSON code fence is supported")
         payload = match.group("body")
 
-    def unique_pairs(pairs):
-        data = {}
-        for key, value in pairs:
-            if key in data:
-                raise ValueError("Duplicate JSON key")
-            data[key] = value
-        return data
-
-    def reject_constant(value):
-        raise ValueError("Non-standard JSON constant: " + value)
-
     try:
-        plan = json.loads(payload, object_pairs_hook=unique_pairs,
-                          parse_constant=reject_constant)
+        plan = _strict_json_loads(payload)
     except (TypeError, ValueError) as exc:
         raise ProjectError("The coding model must return one unambiguous JSON project") from exc
     return review_proposal(plan)
@@ -148,9 +154,14 @@ def review_proposal(plan):
                 raise ProjectError(f"Python syntax error in {path}, line {exc.lineno}") from exc
         if path.lower().endswith(".json"):
             try:
-                json.loads(contents)
+                _strict_json_loads(contents)
             except ValueError as exc:
                 raise ProjectError(f"Invalid JSON in {path}") from exc
+        if path.lower().endswith(".toml"):
+            try:
+                tomllib.loads(contents)
+            except tomllib.TOMLDecodeError as exc:
+                raise ProjectError(f"Invalid TOML in {path}") from exc
         clean[path] = contents
     quality_warnings = []
     if kind == "website":
