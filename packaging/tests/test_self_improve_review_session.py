@@ -92,6 +92,24 @@ class ReviewSessionTests(unittest.TestCase):
         with self.assertRaises(proposals.ProposalError):
             self.session.submit(self.changes)
 
+    def test_audit_trail_excludes_source_and_review_tokens(self):
+        self.session.submit(self.changes)
+        shown = self.session.show_review()
+        self.session.record_user_test_consent(
+            review_token=shown["review_token"],
+            fingerprint=shown["fingerprint"])
+        self.session.stop()
+        events = self.session.audit()
+        self.assertEqual([e["event"] for e in events], [
+            "proposal_submitted", "review_displayed",
+            "test_consent_recorded", "session_stopped"])
+        self.assertTrue(events[-1]["consent_revoked"])
+        text = str(events)
+        self.assertNotIn(shown["review_token"], text)
+        self.assertNotIn("def run", text)
+        events[0]["event"] = "tampered"
+        self.assertEqual(self.session.audit()[0]["event"], "proposal_submitted")
+
     def test_never_executes_untrusted_code(self):
         with patch("subprocess.run", side_effect=AssertionError("unsafe")), \
              patch("subprocess.Popen", side_effect=AssertionError("unsafe")):
