@@ -184,9 +184,9 @@ jobs:
           $oldDir = Join-Path $env:RUNNER_TEMP 'old_falcon_release'
           New-Item -Path $oldDir -ItemType Directory -Force | Out-Null
           gh release download v13.9.0 -p Falcon_Ai_Setup.exe -D $oldDir --clobber
-          if ($LASTEXITCODE -ne 0) { throw 'Verified 13.8.0 release asset missing' }
+          if ($LASTEXITCODE -ne 0) { throw 'Verified 13.9.0 release asset missing' }
           $oldSetup = Join-Path $oldDir 'Falcon_Ai_Setup.exe'
-          $remote = gh api repos/Falcomam/FalconAI-Releases/releases/tags/v13.9.1 --jq '.assets[] | select(.name == "Falcon_Ai_Setup.exe") | .digest'
+          $remote = gh api repos/Falcomam/FalconAI-Releases/releases/tags/v13.9.0 --jq '.assets[] | select(.name == "Falcon_Ai_Setup.exe") | .digest'
           if ($LASTEXITCODE -ne 0 -or -not $remote) { throw 'Old installer trusted SHA256 missing' }
           $actual = (Get-FileHash -LiteralPath $oldSetup -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($remote.Trim().ToLowerInvariant() -ne ('sha256:' + $actual)) { throw 'Prior release SHA256 mismatch' }
@@ -204,7 +204,7 @@ jobs:
           New-Item -Path $dataDir -ItemType Directory -Force | Out-Null
           $keep = Join-Path $dataDir 'ci_private_data_keep.txt'
           'Do not delete private user data on upgrade' | Set-Content -LiteralPath $keep
-          $stage = Join-Path $dataDir 'installer_updates\falcon_ai_1380_ci'
+          $stage = Join-Path $dataDir 'installer_updates\falcon_ai_1390_ci'
           New-Item -Path $stage -ItemType Directory -Force | Out-Null
           Copy-Item -LiteralPath $newSetup -Destination (Join-Path $stage 'Falcon_Ai_Setup.exe') -Force
           $log = Join-Path $dataDir 'logs\app_installer_update.log'
@@ -232,7 +232,7 @@ jobs:
           }
           $selftest = Start-Process -FilePath $exe -ArgumentList '--falcon-self-test' -PassThru -Wait
           if ($selftest.ExitCode -ne 0) { throw 'Upgraded Windows app self-test failed' }
-          Write-Host 'PASS: verified 13.8.0 -> 13.9.0, auto-reopened Falcon Ai, preserved user data'
+          Write-Host 'PASS: verified 13.9.0 -> 13.9.1, auto-reopened Falcon Ai, preserved user data'
       - name: Publish stable bundled update ONLY after every Windows gate passes
         shell: pwsh
         run: |
