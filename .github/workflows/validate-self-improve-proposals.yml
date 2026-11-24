@@ -4,7 +4,9 @@ on:
     branches: [main]
     paths:
       - "packaging/self_improve_proposals.py"
+      - "packaging/self_improve_review_bridge.py"
       - "packaging/tests/test_self_improve_proposals.py"
+      - "packaging/tests/test_self_improve_review_bridge.py"
       - ".github/workflows/validate-self-improve-proposals.yml"
   workflow_dispatch:
 permissions:
@@ -19,8 +21,10 @@ jobs:
         with:
           python-version: "3.12"
       - name: Check static syntax
-        run: python -m py_compile packaging/self_improve_proposals.py packaging/tests/test_self_improve_proposals.py
+        run: python -m py_compile packaging/self_improve_proposals.py packaging/self_improve_review_bridge.py packaging/tests/test_self_improve_proposals.py packaging/tests/test_self_improve_review_bridge.py
       - name: Run review-only proposal regressions
         run: python -m unittest discover -s packaging/tests -p test_self_improve_proposals.py -v
+      - name: Verify matching review and stale-source safeguards
+        run: python -m unittest discover -s packaging/tests -p test_self_improve_review_bridge.py -v
       - name: Explicitly prohibit automatic release
         run: echo "Development-only; no app installation, model code execution, build publication or new runtime permissions."
