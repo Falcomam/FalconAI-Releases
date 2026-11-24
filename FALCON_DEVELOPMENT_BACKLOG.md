@@ -1,16 +1,24 @@
 # Falcon Ai — Consolidated development backlog (2026-11-24)
 
-**User direction:** Work in substantial, tested batches. Stay inside ONE Falcon Ai and ONE main chat window. Don't release or notify for tiny progress. Let the verified-test-ready release watcher announce an actual major Windows update. **Current installed version: v13.8.0.**
+**User direction:** Work in substantial, tested batches. Stay inside ONE Falcon Ai and ONE main chat window. Don't release or notify for tiny progress. Let the verified-test-ready release watcher announce an actual major Windows update. **Latest verified release: v13.9.0 (2026-11-24); user's installed version may still be v13.8.0 until updated.**
 
-## Next major bundled milestone: quality and experience
+## Latest completed bundle: Falcon Ai V13.9.0 — released, Windows verified
 
-| Priority | Feature / acceptance standard | State |
-|---|---|---|
-| P0 | Generated website checker detects malformed/unclosed HTML, missing complete UTF-8 meta, required page structure. Warns about broken same-page anchors. Never saves invalid proposals. | Development source; cross-OS CI |
-| P0 | One-click **Copy reply** on individual Falcon messages; exact Unicode and multiline code, no other messages or clipboard network access | Development candidate, earlier Windows unit tests passed |
-| P0 | Minecraft-style **Tab / Shift+Tab** completion, descriptive hint, **Commands** categorized button next to Send. Inserts but never executes or approves. | Development candidate, earlier Windows unit tests passed |
-| P0 | Integration tests: all three coexist with Developer Mode and the original chat; packaged Windows EXE smoke test | Still required |
-| P0 | Full Windows installer, v13.8.0 → newer-version in-place upgrade, relaunch and local-data-preservation test, SHA-256 digest | Required **before** release |
+- **Official release:** https://github.com/Falcomam/FalconAI-Releases/releases/tag/v13.9.0
+- **Successful Windows installer and in-place upgrade CI:** https://github.com/Falcomam/FalconAI-Releases/actions/runs/45499071490
+- **Verified installer:** Falcon_Ai_Setup.exe, SHA256 `8e2f7642b19a0a55d08d27d48ddf7f1edc53ee473f2ee74452eeea0011de7e4b`.
+- Includes Copy Reply, command completion/picker, website source quality checks, saved-project list/open/show, reviewed source edits and additions, safe file backups and rollback, retaining one purple chat, Ollama and STOP.
+- GitHub Windows CI passed source regression, frozen EXE smoke, clean install, v13.8.0 -> v13.9.0 installer upgrade/relaunch and preserved user data. **Do not mistake this for user-hardware acceptance testing.**
+- Next development work is post-v13.9.0 and must remain development-only until a new substantial tested package is released. Never rewrite v13.9.0 GitHub Release assets.
+
+## Post-v13.9.0 priorities
+
+1. Improve coding model output quality and show actionable static code diagnostics.
+2. Read-only source search in saved projects in the original chat. Do not give filesystem-wide search or code-execution rights.
+3. Improve per-file source edits to reduce small-model context overhead without breaking explicit review, SHA256 approval and backups.
+4. Add opt-in, safely restricted build/test capabilities (requires permission and platform isolation).
+5. Improve Ollama reconnect, performance, STOP behavior and purple UI coherence.
+6. Validate new bundled Windows releases using EXE smoke, clean install, real upgrade/relaunch and data integrity checks; publish only after full gates.
 
 ## Next planned coding upgrades (prioritized independently)
 
