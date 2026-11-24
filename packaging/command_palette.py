@@ -22,17 +22,20 @@ GROUPS = (
         Command("List installed models", "/engine list"),
         Command("Choose installed model", "/engine use "),
         Command("Start local Ollama", "/engine start"),
+        Command("Choose installed coding model", "/engine use-code "),
+        Command("Show selected coding model", "/engine coding"),
     )),
     ("Coding & Projects", (
         Command("Create a website", "/project website "),
         Command("Create Python project", "/project python "),
         Command("Create Minecraft Fabric mod", "/project fabric_mod "),
+        Command("Check project source (static only)", "/project check"),
         Command("Review generated files", "/project review"),
         Command("Inspect a source file", "/project show "),
         Command("Approve reviewed files", "/project approve"),
         Command("Reject project", "/project reject"),
         Command("Make a Python code draft", "/build "),
-        Command("Propose Falcon source improvement", "/upgrade "),
+        # Packaged app self-patching is disabled: omit legacy /upgrade shortcut.
     )),
     ("PC & Research", (
         Command("Plan a PC task", "/do "),
