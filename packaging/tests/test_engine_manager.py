@@ -3,10 +3,12 @@ import io
 import json
 from pathlib import Path
 import tempfile
+import sys
 import unittest
 from unittest.mock import patch
 
-from packaging import engine_manager as engine
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import engine_manager as engine
 
 
 class FakeResponse:
