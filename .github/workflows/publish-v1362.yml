@@ -36,6 +36,7 @@ jobs:
           python patches/v13.6/apply.py
           python patches/v13.6.1/apply.py
           python patches/v13.6.2/apply.py
+      # Keep caches, virtual environments and diagnostic logs out of release ZIPs.
       - name: Compile and run regression tests
         run: |
           python -m compileall -q build/Falcon_AI_V13_6_2
