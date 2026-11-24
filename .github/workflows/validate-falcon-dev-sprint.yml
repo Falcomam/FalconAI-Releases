@@ -7,11 +7,13 @@ on:
       - "packaging/developer_chat.py"
       - "packaging/developer_generation.py"
       - "packaging/project_static_check.py"
+      - "packaging/engine_manager.py"
       - "packaging/self_improve_*.py"
       - "packaging/tests/test_developer_workspace.py"
       - "packaging/tests/test_developer_chat.py"
       - "packaging/tests/test_developer_generation.py"
       - "packaging/tests/test_project_static_check.py"
+      - "packaging/tests/test_engine_manager.py"
       - "packaging/tests/test_self_improve_*.py"
       - ".github/workflows/validate-falcon-dev-sprint.yml"
   workflow_dispatch:
@@ -51,8 +53,9 @@ jobs:
           tests.extend([Path("packaging/tests/test_developer_workspace.py"),
                         Path("packaging/tests/test_developer_chat.py"),
                         Path("packaging/tests/test_developer_generation.py"),
-                        Path("packaging/tests/test_project_static_check.py")])
-          if len(tests) < 11:
+                        Path("packaging/tests/test_project_static_check.py"),
+                        Path("packaging/tests/test_engine_manager.py")])
+          if len(tests) < 12:
               raise SystemExit("Missing required self-improvement test files")
           for path in tests:
               print("Checking", path, flush=True)
