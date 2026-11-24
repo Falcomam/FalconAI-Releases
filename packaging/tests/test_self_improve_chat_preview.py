@@ -39,6 +39,20 @@ class PreviewTests(unittest.TestCase):
         self.assertNotIn(chr(27), cleaned)
         self.assertIn(r"\u001b", cleaned)
 
+    def test_pages_reconstruct_complete_diff_without_truncation(self):
+        changes = {"engine.py": {
+            "before": self.changes["engine.py"]["before"],
+            "after": "def x():\n    return '" + "z" * 30000 + "FINAL_SENTINEL'\n",
+        }}
+        pages = preview.render_pages(changes, trusted_checkout=self.root,
+                                     trusted_sha256=self.hashes, page_size=4000)
+        self.assertGreater(len(pages), 2)
+        self.assertTrue(all(len(page) <= 4000 for page in pages))
+        body = "".join(pages)
+        self.assertIn("FINAL_SENTINEL", body)
+        self.assertNotIn("[Preview truncated:", body)
+        self.assertIn("Tests executed: NO", body)
+
     def test_bad_pin_blocked(self):
         with self.assertRaises(proposals.ProposalError):
             preview.render(self.changes, trusted_checkout=self.root,
