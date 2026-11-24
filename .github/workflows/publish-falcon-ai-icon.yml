@@ -1,0 +1,212 @@
+name: Build and release Falcon Ai 13.7.1 Windows app
+# Inno Setup 6 directive compatibility corrected
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/publish-falcon-ai-icon.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: falcon-ai-13-7-1-icon
+  cancel-in-progress: false
+
+jobs:
+  build-windows-app:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      PYTHONUTF8: "1"
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout Falcon project
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install packaging tools
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller==6.16.0
+      - name: Reconstruct and test established Falcon release
+        shell: pwsh
+        run: |
+          python patches/v13.6/apply.py
+          if ($LASTEXITCODE -ne 0) { throw 'Base reconstruction failed' }
+          python patches/v13.6.1/apply.py
+          if ($LASTEXITCODE -ne 0) { throw '13.6.1 patch failed' }
+          python patches/v13.6.2/apply.py
+          if ($LASTEXITCODE -ne 0) { throw '13.6.2 patch failed' }
+          python patches/v13.6.3/apply.py
+          if ($LASTEXITCODE -ne 0) { throw '13.6.3 patch failed' }
+          python patches/v13.6.4/apply.py
+          if ($LASTEXITCODE -ne 0) { throw '13.6.4 patch failed' }
+          python patches/v13.6.5/apply.py
+          if ($LASTEXITCODE -ne 0) { throw '13.6.5 patch failed' }
+          # Existing 270-test suite is validated in Linux release CI; some tests
+          # deliberately reject Windows drive paths and 8.3 temporary aliases.
+          # Here test the Windows-specific app build instead.
+          Push-Location build/Falcon_AI_V13_6_5
+          python -m unittest discover -s tests -p 'test_v1365_dropdown.py' -q
+          if ($LASTEXITCODE -ne 0) { throw 'Falcon UI smoke tests failed' }
+          Pop-Location
+      - name: Prepare Falcon Ai 13.7.1 and dependencies
+        shell: pwsh
+        run: |
+          python packaging/prepare.py
+          if ($LASTEXITCODE -ne 0) { throw 'Falcon Ai 13.7.0 base failed validation' }
+          python packaging/prepare_icon_release.py
+          if ($LASTEXITCODE -ne 0) { throw 'Purple Falcon original SHA256 validation / icon conversion failed' }
+          python -m pip install -r build/Falcon_Ai_App_V13_7_1/requirements.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Falcon dependencies failed installation' }
+          python -m compileall -q build/Falcon_Ai_App_V13_7_1
+          python -m py_compile build/falcon_app_1371_runtime/app_updates.py build/falcon_app_1371_runtime/app_entry.py
+          if ($LASTEXITCODE -ne 0) { throw 'App compile failed' }
+      - name: Package self-contained Falcon Ai.exe
+        shell: pwsh
+        run: |
+          $source = (Resolve-Path 'build/Falcon_Ai_App_V13_7_1').Path
+          $args = @(
+            '--noconfirm', '--clean', '--windowed', '--onedir',
+            '--name', 'Falcon Ai',
+            '--distpath', 'dist', '--workpath', 'build/pyinstaller',
+            '--specpath', 'build/pyinstaller',
+            '--add-data', ((Resolve-Path 'packaging/app_update_restart.ps1').Path + ';.'),
+            '--add-data', ($source + '\RELEASE_VERSION.txt;.'),
+            '--add-data', ((Resolve-Path 'build/falcon_app_1371_runtime/Falcon_Ai_Icon.png').Path + ';.'),
+            '--icon', (Resolve-Path 'build/falcon_app_1371_runtime/Falcon_Ai_Icon.ico').Path,
+            '--hidden-import=winotify', '--hidden-import=pyautogui',
+            '--hidden-import=PIL.Image', '--collect-all=pyautogui'
+          )
+          Get-ChildItem -LiteralPath $source -Filter '*.py' -File | ForEach-Object {
+            $args += @('--add-data', ($_.FullName + ';.'))
+            if ($_.BaseName -notin @('sandbox_runner')) {
+              $args += ('--hidden-import=' + $_.BaseName)
+            }
+          }
+          $env:PYTHONPATH = $source + [IO.Path]::PathSeparator + (Resolve-Path 'build/falcon_app_1371_runtime').Path
+          $args += (Resolve-Path 'build/falcon_app_1371_runtime/app_entry.py').Path
+          python -m PyInstaller @args
+          if ($LASTEXITCODE -ne 0) { throw 'PyInstaller failed' }
+          if (-not (Test-Path 'dist/Falcon Ai/Falcon Ai.exe')) { throw 'Falcon Ai.exe missing' }
+      - name: Self-test application executable
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path 'dist/Falcon Ai/Falcon Ai.exe').Path
+          $p = Start-Process -FilePath $exe -ArgumentList '--falcon-self-test' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw ('Falcon Ai executable self-test failed: ' + $p.ExitCode) }
+          Write-Host 'PASS: frozen Falcon Ai core modules, updater, and monitor imports'
+      - name: Prepare Inno Setup
+        shell: pwsh
+        run: |
+          $compiler = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $compiler)) {
+            choco install innosetup -y --no-progress --limit-output
+            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
+          }
+          if (-not (Test-Path -LiteralPath $compiler)) { throw 'Inno Setup compiler not present' }
+          Copy-Item -LiteralPath 'build/falcon_app_1371_runtime/Falcon_Ai.iss' -Destination 'Falcon_Ai.iss'
+          & $compiler 'Falcon_Ai.iss'
+          if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }
+          if (-not (Test-Path 'output/Falcon_Ai_Setup.exe')) { throw 'One-click installer missing' }
+      - name: Test clean per-user installation and uninstall
+        shell: pwsh
+        run: |
+          $setup = (Resolve-Path 'output/Falcon_Ai_Setup.exe').Path
+          $appDir = Join-Path $env:LOCALAPPDATA 'Programs\Falcon Ai'
+          $p = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw ('Silent install failed: ' + $p.ExitCode) }
+          $exe = Join-Path $appDir 'Falcon Ai.exe'
+          if (-not (Test-Path $exe)) { throw 'Installed Falcon Ai.exe missing' }
+          $x = Start-Process -FilePath $exe -ArgumentList '--falcon-self-test' -Wait -PassThru
+          if ($x.ExitCode -ne 0) { throw ('Installed Falcon Ai.exe self-test failed: ' + $x.ExitCode) }
+          Write-Host 'PASS: one-click per-user installer and installed app test'
+          $unins = Get-ChildItem $appDir -Filter 'unins*.exe' | Select-Object -First 1
+          if (-not $unins) { throw 'Windows uninstaller missing' }
+          Write-Host ('PASS: standard Windows uninstaller present: ' + $unins.Name)
+      - name: Test V13.7.0 to V13.7.1 installer update and GUI relaunch
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $appDir = Join-Path $env:LOCALAPPDATA 'Programs\Falcon Ai'
+          $newSetup = (Resolve-Path 'output/Falcon_Ai_Setup.exe').Path
+          $uninstall = Get-ChildItem -LiteralPath $appDir -Filter 'unins*.exe' -File | Select-Object -First 1
+          if (-not $uninstall) { throw 'Prior test did not install Falcon Ai' }
+          $u = Start-Process -FilePath $uninstall.FullName -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -PassThru -Wait
+          if ($u.ExitCode -ne 0) { throw 'Temporary Windows CI uninstall failed' }
+          $oldSetup = Join-Path $env:RUNNER_TEMP 'Falcon_Ai_Setup.exe'
+          gh release download v13.7.0 -p Falcon_Ai_Setup.exe -D $env:RUNNER_TEMP --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Previously published Falcon Ai V13.7.0 installer unavailable' }
+          $old = Start-Process -FilePath $oldSetup -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-' -Wait -PassThru
+          if ($old.ExitCode -ne 0) { throw 'Installing previous Falcon Ai release failed' }
+          $exe = Join-Path $appDir 'Falcon Ai.exe'
+          $helper = Join-Path $appDir '_internal\app_update_restart.ps1'
+          if (-not (Test-Path -LiteralPath $exe) -or -not (Test-Path -LiteralPath $helper)) {
+            throw 'Previous Falcon Ai release helper is missing'
+          }
+          $dataDir = Join-Path $env:LOCALAPPDATA 'FalconAI'
+          New-Item -Path $dataDir -ItemType Directory -Force | Out-Null
+          $keepData = Join-Path $dataDir 'ci_preserve_data.txt'
+          'Keep private data across update' | Set-Content -LiteralPath $keepData
+          $cache = Join-Path $dataDir 'installer_updates\falcon_ai_icon_ci'
+          New-Item -Path $cache -ItemType Directory -Force | Out-Null
+          Copy-Item -LiteralPath $newSetup -Destination (Join-Path $cache 'Falcon_Ai_Setup.exe') -Force
+          $log = Join-Path $dataDir 'logs\app_installer_update.log'
+          if (Test-Path -LiteralPath $log) { Remove-Item -LiteralPath $log -Force }
+          $up = Start-Process -FilePath 'powershell.exe' -ArgumentList @(
+            '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',
+            '-File',('"' + $helper + '"'),
+            '-WaitPid','999999',
+            '-Installer',('"' + (Join-Path $cache 'Falcon_Ai_Setup.exe') + '"'),
+            '-AppExe',('"' + $exe + '"')
+          ) -PassThru
+          Wait-Process -Id $up.Id -Timeout 120 -ErrorAction Stop
+          $up.Refresh()
+          if ($up.ExitCode -ne 0) {
+            if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log -Tail 25 }
+            throw ('Installer update helper failed, exit: ' + $up.ExitCode)
+          }
+          if (-not (Test-Path -LiteralPath $keepData)) { throw 'User data not preserved during update' }
+          if (-not (Test-Path -LiteralPath $log)) { throw 'New updater did not log results' }
+          $events = Get-Content -LiteralPath $log -Raw
+          Write-Host $events
+          if (-not $events.Contains('Installer exit code 0') -or -not $events.Contains('New Falcon Ai application is running')) {
+            throw 'Updater did not install and successfully relaunch the new GUI'
+          }
+          $installedSelfTest = Start-Process -FilePath $exe -ArgumentList '--falcon-self-test' -PassThru -Wait
+          if ($installedSelfTest.ExitCode -ne 0) { throw 'Upgraded Falcon Ai executable is not V13.7.1' }
+          Write-Host 'PASS: V13.7.0 -> V13.7.1, app restarted, data preserved, icon bundled'
+      - name: Publish verified Falcon Ai installer
+        shell: pwsh
+        run: |
+          $asset = 'output/Falcon_Ai_Setup.exe'
+          $digest = (Get-FileHash -LiteralPath $asset -Algorithm SHA256).Hash.ToLowerInvariant()
+          $size = (Get-Item -LiteralPath $asset).Length
+          Write-Host ('Falcon Ai setup file size: ' + $size)
+          Write-Host ('SHA256: ' + $digest)
+          @"
+          Falcon Ai 13.7.1 - Permanent Purple Falcon Icon update.
+
+          - Official purple falcon app icon baked into Windows executable, title bar, taskbar, desktop and Start menu.
+          - Previous Falcon Ai V13.7.0 remains the installed app until the user approves an update.
+          - One-click Inno Setup installer, Start menu and desktop shortcut.
+          - Self-contained Python runtime and minimalist purple Command Center.
+          - Existing Falcon local data and Ollama configuration are preserved.
+          - Top-right activity dropdown and optional Mini Monitor retained.
+          - New app updater verifies GitHub SHA256 installer and uses a logged external relaunch helper.
+          - Legacy script-based installations are not deleted; user may migrate safely.
+          - Developer Mode remains in development.
+          - Windows installer, EXE self-test, and real V13.7.0 to V13.7.1 update/relaunch test.
+          - This build is unsigned and may display Windows SmartScreen reputation warnings.
+          - Windows user acceptance testing remains necessary.
+          "@ | Set-Content -Encoding utf8 release_notes.txt
+          gh release create v13.7.1 $asset --title 'Falcon Ai V13.7.1 - Purple Falcon Icon' --notes-file release_notes.txt
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub release creation failed' }
