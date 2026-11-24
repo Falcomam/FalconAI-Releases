@@ -1,0 +1,26 @@
+name: Validate Falcon self-improvement proposal review (development only)
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packaging/self_improve_proposals.py"
+      - "packaging/tests/test_self_improve_proposals.py"
+      - ".github/workflows/validate-self-improve-proposals.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  review-only-tests:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check static syntax
+        run: python -m py_compile packaging/self_improve_proposals.py packaging/tests/test_self_improve_proposals.py
+      - name: Run review-only proposal regressions
+        run: python -m unittest discover -s packaging/tests -p test_self_improve_proposals.py -v
+      - name: Explicitly prohibit automatic release
+        run: echo "Development-only; no app installation, model code execution, build publication or new runtime permissions."
