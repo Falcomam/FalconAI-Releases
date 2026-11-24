@@ -1,4 +1,5 @@
 name: Build and release Falcon Ai 13.7.0 Windows app
+# Inno Setup 6 directive compatibility corrected
 
 on:
   push:
