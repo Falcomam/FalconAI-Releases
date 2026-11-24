@@ -117,19 +117,20 @@ replace_one(
             status = engine_manager.probe(timeout=3)
             if not status["online"]:
                 raise RuntimeError("Ollama is offline. Type /engine start.")
-            model = engine_manager.saved_chat_model()
+            coding_model = engine_manager.saved_coding_model()
+            chat_model = engine_manager.saved_chat_model()
+            model = (coding_model if coding_model in status["models"]
+                     else chat_model)
             if model not in status["models"]:
-                raise RuntimeError("Chat model " + model + " isn't installed. Type /engine list.")
+                raise RuntimeError("No coding/chat model is installed. Type /engine list.")
             if cancel.is_set():
                 return None
             import agent
-            raw = agent.ask_ollama(messages, model=model, fmt="json",
-                                   limit=6500, timeout=180, cancel=cancel)
-            if cancel.is_set():
+            plan = developer_generation.generate_with_one_retry(
+                kind=base["plan"]["kind"], messages=messages, model=model,
+                cancel=cancel, ask=agent.ask_ollama)
+            if plan is None:
                 return None
-            candidate = projects.parse_proposal(raw)
-            plan = {"name": candidate["name"], "kind": candidate["kind"],
-                    "files": candidate["files"]}
             revision = revisions.review_revision(base, plan)
             return {"base": base, "plan": plan, "revision": revision}
 
