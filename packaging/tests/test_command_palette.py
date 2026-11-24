@@ -71,7 +71,8 @@ class CommandPaletteTests(unittest.TestCase):
     def test_shift_tab_reverse(self):
         tab = cp.TabCompletion()
         self.assertEqual(tab.complete("/engine ", reverse=True), "/engine coding")
-        self.assertEqual(tab.complete("/engine start", reverse=True), "/engine use ")
+        self.assertEqual(tab.complete("/engine coding", reverse=True), "/engine use-code ")
+        self.assertEqual(tab.complete("/engine use-code ", reverse=True), "/engine start")
 
     def test_no_autocomplete_freeform_text_or_arguments(self):
         tab = cp.TabCompletion()
