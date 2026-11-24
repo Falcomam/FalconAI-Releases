@@ -15,13 +15,14 @@ import self_improve_proposals as proposals
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
 
-def plan(changes, *, trusted_checkout):
+def plan(changes, *, trusted_checkout, trusted_sha256):
     """Return exact pinned review digest and non-executable test requirements.
 
     The returned steps are descriptions rather than commands. Tests that run
     arbitrary Python are always categorized 'requires_approved_isolation'.
     """
-    reviewed = bridge.prepare_from_checkout(changes, trusted_checkout=trusted_checkout)
+    reviewed = bridge.prepare_pinned_from_checkout(
+        changes, trusted_checkout=trusted_checkout, trusted_sha256=trusted_sha256)
     files = []
     for item in reviewed["files"]:
         path = proposals._path(item["path"])
