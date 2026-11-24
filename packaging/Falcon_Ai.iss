@@ -13,7 +13,6 @@ UninstallDisplayName={#MyAppName}
 DefaultDirName={localappdata}\Programs\Falcon Ai
 DefaultGroupName=Falcon Ai
 PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=none
 OutputDir=output
 OutputBaseFilename=Falcon_Ai_Setup
 Compression=lzma2
@@ -27,7 +26,6 @@ ArchitecturesInstallIn64BitMode=x64compatible
 CloseApplications=yes
 RestartApplications=no
 UninstallDisplayIcon={app}\{#MyAppExeName}
-LicenseFile=
 
 [Files]
 Source: "dist\Falcon Ai\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
