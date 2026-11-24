@@ -4,6 +4,7 @@ import ast
 import difflib
 import hashlib
 import json
+import tomllib
 import re
 from pathlib import PurePosixPath
 
@@ -53,7 +54,27 @@ def _source(value, path):
             json.loads(value)
         except ValueError as exc:
             raise ProposalError(f"Invalid JSON in {path}") from exc
+    if path.lower().endswith(".toml"):
+        try:
+            tomllib.loads(value)
+        except tomllib.TOMLDecodeError as exc:
+            raise ProposalError(f"Invalid TOML in {path}") from exc
     return raw
+
+
+def _diff_stats(before, after):
+    # Purely textual preview metrics. Never treat as evidence of code safety.
+    import difflib
+    old = before.splitlines()
+    new = after.splitlines()
+    additions = deletions = 0
+    for op, a, b, c, d in difflib.SequenceMatcher(
+            None, old, new, autojunk=False).get_opcodes():
+        if op in ("insert", "replace"):
+            additions += d - c
+        if op in ("delete", "replace"):
+            deletions += b - a
+    return {"added_lines": additions, "removed_lines": deletions}
 
 
 def review(changes):
@@ -88,7 +109,8 @@ def review(changes):
                                            after.splitlines(keepends=True),
                                            fromfile="a/" + path, tofile="b/" + path))
         entries.append({"path": path, "before_sha256": hashlib.sha256(original).hexdigest(),
-                        "after_sha256": hashlib.sha256(replacement).hexdigest(), "diff": diff})
+                        "after_sha256": hashlib.sha256(replacement).hexdigest(),
+                        "line_changes": _diff_stats(before, after), "diff": diff})
     digest = hashlib.sha256(json.dumps(canonical, ensure_ascii=False, sort_keys=True,
                                      separators=(",", ":")).encode("utf-8")).hexdigest()
     return {"fingerprint": digest, "files": entries, "file_count": len(entries),
