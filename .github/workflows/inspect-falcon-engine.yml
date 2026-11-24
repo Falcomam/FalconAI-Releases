@@ -36,7 +36,7 @@ jobs:
                   picks.update(range(max(0,i-2),min(len(lines),i+4)))
               if n=='ollama_runtime.py': picks=set(range(len(lines)))
               if n=='falcon.py':
-                  picks.update(range(0,215))
+                  picks.update(range(180,283))
                   picks.update(range(615,675))
                   picks.update(range(686,794))
               if n=='unified.py': picks.update(range(700,817))
