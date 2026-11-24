@@ -5,6 +5,7 @@ import difflib
 import hashlib
 import json
 import tomllib
+import self_improve_risk_hints
 import re
 from pathlib import PurePosixPath
 
@@ -108,9 +109,14 @@ def review(changes):
         diff = "".join(difflib.unified_diff(before.splitlines(keepends=True),
                                            after.splitlines(keepends=True),
                                            fromfile="a/" + path, tofile="b/" + path))
+        risk = (self_improve_risk_hints.inspect_python(after, filename=path)
+                if path.lower().endswith(".py")
+                else {"advisory_only": True, "manual_review_required": False,
+                      "indicators": [], "indicators_truncated": False})
         entries.append({"path": path, "before_sha256": hashlib.sha256(original).hexdigest(),
                         "after_sha256": hashlib.sha256(replacement).hexdigest(),
-                        "line_changes": _diff_stats(before, after), "diff": diff})
+                        "line_changes": _diff_stats(before, after),
+                        "risk_hints": risk, "diff": diff})
     digest = hashlib.sha256(json.dumps(canonical, ensure_ascii=False, sort_keys=True,
                                      separators=(",", ":")).encode("utf-8")).hexdigest()
     return {"fingerprint": digest, "files": entries, "file_count": len(entries),
