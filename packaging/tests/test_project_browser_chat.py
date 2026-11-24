@@ -103,7 +103,7 @@ class ChatProjectBrowserTests(unittest.TestCase):
         self.assertIn("Cannot preview", self.app.messages[-1][1])
         self.assertIsNone(self.chat.pending)
         self.assertEqual((self.workspace / "falcon_project/main.py").read_text(encoding="utf-8"),
-                         "print('🦅')\\n")
+                         "print('🦅')\n")
 
     def test_reject_forgets_open_snapshot(self):
         _, b, _ = self.routes()
