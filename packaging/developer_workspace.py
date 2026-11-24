@@ -91,7 +91,7 @@ def review_proposal(plan):
         raise ProjectError("Project must contain only name, kind and files")
     name = _check_name(plan["name"])
     kind = plan["kind"]
-    if kind not in ALLOWED_KINDS:
+    if not isinstance(kind, str) or kind not in ALLOWED_KINDS:
         raise ProjectError("Project type must be python, website or fabric_mod")
     files = plan["files"]
     if not isinstance(files, dict) or not 1 <= len(files) <= MAX_FILES:
@@ -104,6 +104,10 @@ def review_proposal(plan):
         folded = "/".join(parts).casefold()
         if folded in seen:
             raise ProjectError("Duplicate file path, including Windows case-insensitive collisions")
+        # Reject cases where a proposed file is also somebody else's folder.
+        if any(other == folded or other.startswith(folded + "/") or folded.startswith(other + "/")
+               for other in seen):
+            raise ProjectError("Conflicting file and directory paths")
         seen.add(folded)
         if not isinstance(contents, str) or "\0" in contents:
             raise ProjectError("Generated file contents must be UTF-8 text")
