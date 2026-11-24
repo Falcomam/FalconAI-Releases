@@ -102,6 +102,25 @@ class TargetedEditsTests(unittest.TestCase):
                 self.base, "Update helpers.py so answer returns 2", max_chars=12000)
         self.base["plan"]["files"]["helpers.py"] = original
 
+    def test_content_relevance_selects_a_file_without_name_mention(self):
+        plan = self.base["plan"]
+        plan["files"]["ui.html"] = "<button>purple gradient glowing</button>\n"
+        plan["files"]["util.py"] = "def unrelated():\n    return 1\n"
+        self.base["fingerprint"] = revisions._snapshot_fingerprint(plan)
+        context = targeted.select_context(
+            self.base, "Change the purple gradient button so it glows brighter",
+            max_files=1)
+        self.assertEqual(tuple(context["selected_files"]), ("ui.html",))
+
+    def test_named_multiple_files_must_fit_together(self):
+        self.base["plan"]["files"]["main.py"] = "print(1)\n" * 120
+        self.base["plan"]["files"]["helpers.py"] = "def x(): pass\n" * 120
+        self.base["fingerprint"] = revisions._snapshot_fingerprint(self.base["plan"])
+        with self.assertRaisesRegex(projects.ProjectError, "combined coding context"):
+            targeted.select_context(
+                self.base, "Update main.py and helpers.py together",
+                max_chars=1500, max_files=2)
+
     def test_unselected_source_changes_refused(self):
         context = targeted.select_context(
             self.base, "Update helpers.py so answer returns 2", max_files=1)
