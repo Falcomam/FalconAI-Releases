@@ -15,7 +15,7 @@ MAX_PREVIEW = 24_000
 
 def _visible(value):
     # Prevent terminal/GUI control characters from leaking into log/chat preview.
-    return "".join(char if char == "\n" or 32 <= ord(char) <= 126
+    return "".join(char if char == "\n" or char.isprintable()
                    else ("\\u%04x" % ord(char)) for char in value)
 
 
