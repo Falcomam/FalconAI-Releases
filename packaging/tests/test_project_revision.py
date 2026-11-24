@@ -49,13 +49,11 @@ class ProjectRevisionTests(unittest.TestCase):
         self.assertEqual((self.workspace / "myapp" / "main.py").read_text(),
                          "print('old')\n")
 
-    def test_review_rejects_missing_added_or_renamed_files(self):
+    def test_review_rejects_missing_renamed_or_changed_kind(self):
         s = edits.load_project("myapp", workspace=self.workspace)
-        for change in ("add", "delete", "rename", "kind"):
+        for change in ("delete", "rename", "kind"):
             new = self.modified()
-            if change == "add":
-                new["files"]["config.json"] = "{}"
-            elif change == "delete":
+            if change == "delete":
                 del new["files"]["README.md"]
             elif change == "rename":
                 new["name"] = "different"
@@ -96,6 +94,96 @@ class ProjectRevisionTests(unittest.TestCase):
         self.assertFalse(restored["executed"])
         self.assertEqual(saved.read_text(), "print('old')\n")
         self.assertEqual((backup / "main.py").read_text(), "print('old')\n")
+
+    def test_add_new_source_file_and_rollback(self):
+        original = edits.load_project("myapp", workspace=self.workspace)
+        new = self.modified()
+        new["files"]["src/feature.py"] = "def hello():\\n    return 'falcon'\\n".replace("\\n", "\n")
+        reviewed = edits.review_revision(original, new)
+        self.assertEqual(reviewed["added"], ("src/feature.py",))
+        self.assertEqual(reviewed["updated"], ("main.py",))
+        self.assertIn("src/feature.py", reviewed["diff"])
+        self.assertIn("/dev/null", reviewed["diff"])
+        newfile = self.workspace / "myapp/src/feature.py"
+        self.assertFalse(newfile.exists())
+        out = edits.save_revision_approved(original, new, reviewed["new_fingerprint"],
+                                          workspace=self.workspace)
+        self.assertEqual(out["added"], ("src/feature.py",))
+        self.assertEqual(newfile.read_text(), new["files"]["src/feature.py"])
+        self.assertEqual((self.workspace / "myapp/main.py").read_text(), "print('new')\n")
+        restored = edits.rollback_revision("myapp", out["backup_id"],
+                                           workspace=self.workspace)
+        self.assertIn("src/feature.py", restored["removed_added"])
+        self.assertFalse(newfile.exists())
+        self.assertFalse(newfile.parent.exists())
+        self.assertEqual((self.workspace / "myapp/main.py").read_text(), "print('old')\n")
+
+    def test_add_only_revision_is_reviewable_and_reversible(self):
+        original = edits.load_project("myapp", workspace=self.workspace)
+        new = copy.deepcopy(original["plan"])
+        new["files"]["settings.json"] = '{"enabled":true}'
+        rev = edits.review_revision(original, new)
+        self.assertEqual(rev["updated"], ())
+        self.assertEqual(rev["added"], ("settings.json",))
+        out = edits.save_revision_approved(original, new, rev["new_fingerprint"],
+                                          workspace=self.workspace)
+        self.assertTrue((self.workspace / "myapp/settings.json").exists())
+        self.assertEqual((self.workspace / "myapp/main.py").read_text(), "print('old')\n")
+        edits.rollback_revision("myapp", out["backup_id"], workspace=self.workspace)
+        self.assertFalse((self.workspace / "myapp/settings.json").exists())
+
+    def test_added_file_not_silently_overwritten_if_existing(self):
+        original = edits.load_project("myapp", workspace=self.workspace)
+        new = self.modified()
+        new["files"]["settings.json"] = "{}"
+        reviewed = edits.review_revision(original, new)
+        (self.workspace / "myapp/settings.json").write_text("user contents")
+        with self.assertRaisesRegex(dev.ProjectError, "changed since review"):
+            edits.save_revision_approved(original, new, reviewed["new_fingerprint"],
+                                          workspace=self.workspace)
+        self.assertEqual((self.workspace / "myapp/settings.json").read_text(),
+                         "user contents")
+
+    def test_added_file_with_bad_syntax_or_forbidden_path_rejected(self):
+        original = edits.load_project("myapp", workspace=self.workspace)
+        for path, body in (("src/bad.py", "def fail(:\\n"),
+                           ("src/task.exe", "bad"),
+                           ("../escape.py", "print('bad')"),
+                           ("README.md/new.py", "pass")):
+            new = self.modified()
+            new["files"][path] = body
+            with self.subTest(path=path), self.assertRaises(dev.ProjectError):
+                edits.review_revision(original, new)
+
+    def test_new_folder_symlink_attack_is_blocked(self):
+        original = edits.load_project("myapp", workspace=self.workspace)
+        new = self.modified()
+        new["files"]["outside/attack.py"] = "pass"
+        rev = edits.review_revision(original, new)
+        outside = Path(self.tmp.name) / "foreign"
+        outside.mkdir()
+        link = self.workspace / "myapp/outside"
+        try:
+            link.symlink_to(outside, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("Symlink creation unavailable")
+        with self.assertRaises(dev.ProjectError):
+            edits.save_revision_approved(original, new, rev["new_fingerprint"],
+                                          workspace=self.workspace)
+        self.assertFalse((outside / "attack.py").exists())
+
+    def test_added_file_rollback_refuses_later_changes(self):
+        original = edits.load_project("myapp", workspace=self.workspace)
+        new = self.modified()
+        new["files"]["src/feature.py"] = "print('added')\\n".replace("\\n", "\n")
+        reviewed = edits.review_revision(original, new)
+        out = edits.save_revision_approved(original, new, reviewed["new_fingerprint"],
+                                          workspace=self.workspace)
+        target = self.workspace / "myapp/src/feature.py"
+        target.write_text("print('user changed')\n")
+        with self.assertRaisesRegex(dev.ProjectError, "changed since review"):
+            edits.rollback_revision("myapp", out["backup_id"], workspace=self.workspace)
+        self.assertEqual(target.read_text(), "print('user changed')\n")
 
     def test_edit_does_not_overwrite_user_changes_since_preview(self):
         original = edits.load_project("myapp", workspace=self.workspace)
