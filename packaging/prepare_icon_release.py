@@ -63,7 +63,7 @@ one(TARGET/'release_updates.py',
 one(TARGET/'falcon_launcher.py', 'Starting Falcon Ai V13.7.0', 'Starting Falcon Ai V13.7.1')
 one(TARGET/'falcon_launcher.py',
     '            app = Falcon(root)',
-    """# Match the Windows EXE, installer, taskbar and desktop shortcut icon.
+    """            # Match the Windows EXE, installer, taskbar and desktop shortcut icon.
             # Load the SHA256-pinned icon bundled with Falcon Ai.
             try:
                 resource = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
