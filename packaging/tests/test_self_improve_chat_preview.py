@@ -37,7 +37,7 @@ class PreviewTests(unittest.TestCase):
         cleaned = preview._visible(value)
         self.assertIn("Falcon 🦅", cleaned)
         self.assertNotIn(chr(27), cleaned)
-        self.assertIn(r"\\u001b", cleaned)
+        self.assertIn(r"\u001b", cleaned)
 
     def test_bad_pin_blocked(self):
         with self.assertRaises(proposals.ProposalError):
