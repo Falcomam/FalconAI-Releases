@@ -12,6 +12,7 @@ import threading
 
 import developer_workspace as projects
 import developer_generation
+import project_static_check
 import engine_manager
 
 _PROJECT = re.compile(r"^/project(?:\s+(.*))?$", re.I | re.S)
@@ -29,7 +30,7 @@ PROJECT_HELP = (
     "/project python <goal>\n"
     "/project website <goal>\n"
     "/project fabric_mod <goal>\n"
-    "/project review  •  /project show <relative_file>\n"
+    "/project check  •  /project review  •  /project show <relative_file>\n"
     "/project approve  •  /project reject\n"
     "You can also say 'Make me a website that ...'. "
     "Generated code is never run. Review and approve exact files before saving."
@@ -77,6 +78,8 @@ def route(text):
         rest = (match.group(1) or "").strip()
         if rest.casefold() in ("", "help", "status"):
             return "project_status", ""
+        if rest.casefold() == "check":
+            return "project_check", ""
         if rest.casefold() in ("review", "approve", "reject"):
             return "project_" + rest.casefold(), ""
         if rest.lower().startswith("show "):
@@ -144,6 +147,8 @@ class ChatFeatures:
             self._engine(payload)
         elif action == "project_new":
             self._generate(*payload)
+        elif action == "project_check":
+            self._check()
         elif action == "project_review":
             self._review()
         elif action == "project_show":
@@ -317,6 +322,23 @@ class ChatFeatures:
                      "/project approve to save it, or /project reject.")
 
         self._launch("Generating local project draft…", work, complete)
+
+    def _check(self):
+        if not self.pending:
+            self.say("No proposed project to check. Create a draft with /project first.")
+            return
+        if self.app.busy or self._running:
+            self.say("Finish or STOP the current operation before checking a project.")
+            return
+        try:
+            report = project_static_check.inspect(
+                self.pending["plan"],
+                expected_fingerprint=self.pending["review"]["fingerprint"])
+        except (projects.ProjectError, OSError) as exc:
+            self.say("Static project check blocked: " + str(exc)[:240])
+            return
+        self.say(project_static_check.render(report) +
+                 "\nThis check does not replace /project review or authorize saving.")
 
     def _review(self):
         if not self.pending:
