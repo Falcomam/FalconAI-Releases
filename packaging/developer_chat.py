@@ -298,11 +298,11 @@ class ChatFeatures:
             self.app.set_status("Ready • Project proposal")
             warnings = info.get("quality_warnings", ())
             warning_text = (
-                "\\nStatic website checks noted: \\n" +
-                "\\n".join("- " + warning for warning in warnings) +
-                "\\n" if warnings else ""
+                "\nStatic website checks noted: \n" +
+                "\n".join("- " + warning for warning in warnings) +
+                "\n" if warnings else ""
             )
-            self.say("Project proposal ready (NOT saved or executed).\\n"
+            self.say("Project proposal ready (NOT saved or executed).\n"
                      "Name: " + info["name"] + "  |  Type: " + info["kind"] +
                      "\nFiles: " + str(info["file_count"]) +
                      "  |  Size: " + str(info["byte_count"]) + " bytes\n" +
