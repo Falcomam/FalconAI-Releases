@@ -113,8 +113,8 @@ class TargetedEditsTests(unittest.TestCase):
         self.assertEqual(tuple(context["selected_files"]), ("ui.html",))
 
     def test_named_multiple_files_must_fit_together(self):
-        self.base["plan"]["files"]["main.py"] = "print(1)\n" * 120
-        self.base["plan"]["files"]["helpers.py"] = "def x(): pass\n" * 120
+        self.base["plan"]["files"]["main.py"] = "print(1)\n" * 100
+        self.base["plan"]["files"]["helpers.py"] = "def x(): pass\n" * 70
         self.base["fingerprint"] = revisions._snapshot_fingerprint(self.base["plan"])
         with self.assertRaisesRegex(projects.ProjectError, "combined coding context"):
             targeted.select_context(
