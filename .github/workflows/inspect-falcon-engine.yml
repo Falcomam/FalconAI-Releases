@@ -1,0 +1,40 @@
+name: Inspect Falcon engine and menu anchors (development only)
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/inspect-falcon-engine.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Reconstruct verified source and display relevant safe anchors
+        shell: bash
+        run: |
+          set -euo pipefail
+          for patch in v13.6 v13.6.1 v13.6.2 v13.6.3 v13.6.4 v13.6.5; do python "patches/$patch/apply.py"; done
+          python packaging/prepare.py
+          python - <<'PY'
+          from pathlib import Path
+          root=Path('build/Falcon_Ai_App_V13_7_0')
+          for n in ('ollama_runtime.py','falcon.py','agent.py','unified.py','falcon_launcher.py'):
+              p=root/n
+              if not p.is_file(): continue
+              lines=p.read_text(encoding='utf-8').splitlines()
+              print('\n===',n,'===',len(lines),'lines')
+              terms=['class Falcon','class Ollama','def __init__','def chat_message','def send','def run_','def set_status','def _set_status','def update_status','def open_mini_monitor','def _create','def create','def build','def _build','def make','add_cascade','add_command','Tools','ollama','OLLAMA','qwen3','qwen2.5vl','model','_MODEL']
+              matches=[i for i,line in enumerate(lines) if any(t in line for t in terms)]
+              picks=set()
+              for i in matches[:160]:
+                  picks.update(range(max(0,i-2),min(len(lines),i+4)))
+              if n=='ollama_runtime.py': picks=set(range(len(lines)))
+              for i in sorted(picks):
+                  print(f'{i+1:04d} {lines[i][:220]}')
+          PY
