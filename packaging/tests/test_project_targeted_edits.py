@@ -34,6 +34,15 @@ class TargetedEditsTests(unittest.TestCase):
                          self.base["plan"]["files"]["main.py"])
         self.assertFalse(output["execution_allowed"])
 
+    def test_explicit_oversized_file_cannot_be_silently_skipped(self):
+        original = self.base["plan"]["files"]["helpers.py"]
+        self.base["plan"]["files"]["helpers.py"] = "x" * 30000
+        self.base["fingerprint"] = revisions._snapshot_fingerprint(self.base["plan"])
+        with self.assertRaisesRegex(projects.ProjectError, "too large"):
+            targeted.select_context(
+                self.base, "Update helpers.py so answer returns 2", max_chars=12000)
+        self.base["plan"]["files"]["helpers.py"] = original
+
     def test_unselected_source_changes_refused(self):
         context = targeted.select_context(
             self.base, "Update helpers.py so answer returns 2", max_files=1)
