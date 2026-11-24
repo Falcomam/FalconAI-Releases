@@ -6,6 +6,7 @@ on:
       - "packaging/packaged_diagnostics.py"
       - "packaging/prepare_packaged_health_candidate.py"
       - "packaging/tests/test_packaged_diagnostics.py"
+      - "packaging/tests/test_packaged_improve_guard.py"
       - ".github/workflows/validate-packaged-health-candidate.yml"
   workflow_dispatch:
 permissions:
@@ -56,6 +57,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Health candidate entry syntax failure' }
           foreach ($test in @(
             'test_packaged_diagnostics.py',
+            'test_packaged_improve_guard.py',
             'test_quiet_powershell.py',
             'test_project_search.py',
             'test_project_search_chat.py',
