@@ -178,9 +178,9 @@ change_once("developer_chat.py",
             "import project_browser as browser\n",
             "import project_browser as browser\nimport project_targeted_edits as targeted\n")
 change_once("developer_chat.py",
-            '    "/project edit <saved_name> <request>  •  /project diff\n"\n',
-            '    "/project edit <saved_name> <request>  •  /project diff\n"\n'
-            '    "/project edit-small <saved_name> <request>\n"\n')
+            '    "/project edit <saved_name> <request>  •  /project diff\\n"\n',
+            '    "/project edit <saved_name> <request>  •  /project diff\\n"\n'
+            '    "/project edit-small <saved_name> <request>\\n"\n')
 change_once("developer_chat.py",
             '        if rest.lower().startswith("edit "):\n',
             '''        if rest.lower().startswith("edit-small "):
