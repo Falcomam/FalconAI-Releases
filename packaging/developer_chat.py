@@ -39,6 +39,7 @@ ENGINE_HELP = (
     "Local AI Engine commands in this same chat:\n"
     "/engine status  •  /engine list\n"
     "/engine use <installed_model_name>\n"
+    "/engine use-code <installed_model_name>  •  /engine coding\n"
     "/engine start\n"
     "Models are only selected if already installed. Starting Ollama does not download models."
 )
@@ -219,7 +220,7 @@ class ChatFeatures:
         if low in ("", "help"):
             self.say(ENGINE_HELP)
             return
-        if low in ("status", "list"):
+        if low in ("status", "list", "coding"):
             def work(cancel):
                 return engine_manager.probe(timeout=3)
             def complete(result):
@@ -228,17 +229,27 @@ class ChatFeatures:
                     self.say("Ollama is offline. Type /engine start to launch the installed server.")
                     return
                 selected = engine_manager.saved_chat_model()
+                coder = engine_manager.saved_coding_model()
                 lines = list(result["models"])
                 ready = selected in lines
+                effective = coder if coder in lines else selected
                 self.app.set_status(("Ready • " if ready else "AI Offline • Model missing") + selected)
+                coding_note = ("\nCoding model: " + coder +
+                               (" (installed)" if coder in lines else
+                                " (missing; chat fallback " + effective + ")"))
                 if low == "list":
                     self.say("Installed local models:\n" +
                              ("\n".join("- " + name for name in lines) if lines else "(none)") +
-                             "\nSelected chat model: " + selected)
+                             "\nSelected chat model: " + selected + coding_note)
+                elif low == "coding":
+                    self.say("Coding model: " + coder +
+                             (" (installed)." if coder in lines else
+                              " (not installed; chat fallback: " + effective + ").") +
+                             "\nUse /engine use-code <installed_name>.")
                 else:
                     self.say("Ollama is online. Chat model: " + selected +
                              (" (installed)." if ready else " (not installed).") +
-                             "\nUse /engine list or /engine use <name>.")
+                             coding_note + "\nUse /engine list or /engine use <name>.")
             self._launch("Checking local Ollama…", work, complete)
             return
         if low == "start":
@@ -249,6 +260,24 @@ class ChatFeatures:
                          "Requested the local Ollama server to start. Checking availability…")
                 self.app.root.after(1200, lambda: self._engine("status"))
             self._launch("Starting installed Ollama…", work, complete)
+            return
+        if low.startswith("use-code "):
+            selected = command[len("use-code "):].strip()
+            def work(cancel):
+                state = engine_manager.probe(timeout=3)
+                if not state["online"]:
+                    raise engine_manager.EngineError("Ollama is offline")
+                if cancel.is_set():
+                    return None
+                return engine_manager.save_coding_model(
+                    selected, installed_models=state["models"])
+            def complete(model):
+                if model is None:
+                    return
+                self.say("Using installed local coding model " + model +
+                         " for new Developer Mode projects. Chat model is unchanged. "
+                         "No models downloaded or additional PC permissions granted.")
+            self._launch("Checking coding model…", work, complete)
             return
         if low.startswith("use "):
             selected = command[4:].strip()
@@ -288,9 +317,12 @@ class ChatFeatures:
             status = engine_manager.probe(timeout=3)
             if not status["online"]:
                 raise RuntimeError("Ollama is offline. Type /engine start.")
-            model = engine_manager.saved_chat_model()
+            coding_model = engine_manager.saved_coding_model()
+            chat_model = engine_manager.saved_chat_model()
+            model = (coding_model if coding_model in status["models"]
+                     else chat_model)
             if model not in status["models"]:
-                raise RuntimeError("Chat model " + model + " isn't installed. Type /engine list.")
+                raise RuntimeError("No selected coding/chat model is installed. Type /engine list.")
             if cancel.is_set():
                 return None
             import agent
