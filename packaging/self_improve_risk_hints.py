@@ -36,12 +36,29 @@ def inspect_python(source, *, filename="<proposal>"):
         raise ValueError("Python source must be text")
     tree = ast.parse(source, filename=filename)
     findings = []
+    # Import aliases are heuristic: scope shadowing can change meaning.
+    aliases = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for item in node.names:
+                aliases[item.asname or item.name.split(".", 1)[0]] = item.name
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            for item in node.names:
+                if item.name != "*":
+                    aliases[item.asname or item.name] = node.module + "." + item.name
+
     for node in ast.walk(tree):
         label = None
         if isinstance(node, ast.Call):
             name = _full_name(node.func)
+            if name:
+                pieces = name.split(".", 1)
+                name = aliases.get(pieces[0], pieces[0]) + (
+                    "." + pieces[1] if len(pieces) > 1 else "")
             if name in HIGH_IMPACT:
                 label = "high_impact_call:" + name
+            if name and name.endswith((".write_text", ".write_bytes", ".unlink")):
+                label = "possible_file_write_or_delete:" + name
             if name == "open":
                 # Opening a file isn't inherently a write, but flag explicit
                 # modes such as w/a/x/+ for manual review.
