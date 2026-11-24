@@ -51,7 +51,7 @@ jobs:
           assert (app/"RELEASE_VERSION.txt").read_text().strip()=="13.6.4"
           sys.path.insert(0,str(app.resolve()))
           import release_updates
-          assert release_updates.CURRENT_VERSION==(13,6,3)
+          assert release_updates.CURRENT_VERSION==(13,6,4)
           out=pathlib.Path("dist")
           out.mkdir(exist_ok=True)
           archive=out/"Falcon_AI_Update.zip"
@@ -62,7 +62,7 @@ jobs:
                       continue
                   z.write(f,"Falcon_AI_V13_6_4/"+f.relative_to(app).as_posix())
           raw=archive.read_bytes()
-          release_updates.verify_archive(raw,(13,6,3))
+          release_updates.verify_archive(raw,(13,6,4))
           digest=hashlib.sha256(raw).hexdigest()
           (out/"SHA256SUMS.txt").write_text(digest+"  Falcon_AI_Update.zip\n")
           (out/"RELEASE_NOTES.txt").write_text(
