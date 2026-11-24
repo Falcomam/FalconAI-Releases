@@ -37,7 +37,6 @@ def main():
         (RUNTIME / "app_updates.py", "CURRENT_VERSION = (13, 9, 0)", "CURRENT_VERSION = (13, 9, 1)"),
         (RUNTIME / "Falcon_Ai.iss", '#define MyAppVersion "13.9.0"', '#define MyAppVersion "13.9.1"'),
         (entry, "CURRENT_VERSION != (13, 9, 0)", "CURRENT_VERSION != (13, 9, 1)"),
-        (SOURCE / "falcon.py", "V13.9.0", "V13.9.1"),
     ]
     for path, old, _ in changes:
         if path.read_text(encoding="utf-8").count(old) != 1:
