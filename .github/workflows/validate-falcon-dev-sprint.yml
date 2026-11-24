@@ -4,8 +4,12 @@ on:
     branches: [main]
     paths:
       - "packaging/developer_workspace.py"
+      - "packaging/developer_chat.py"
+      - "packaging/developer_generation.py"
       - "packaging/self_improve_*.py"
       - "packaging/tests/test_developer_workspace.py"
+      - "packaging/tests/test_developer_chat.py"
+      - "packaging/tests/test_developer_generation.py"
       - "packaging/tests/test_self_improve_*.py"
       - ".github/workflows/validate-falcon-dev-sprint.yml"
   workflow_dispatch:
@@ -42,8 +46,10 @@ jobs:
           import subprocess
           import sys
           tests = sorted(Path("packaging/tests").glob("test_self_improve_*.py"))
-          tests.append(Path("packaging/tests/test_developer_workspace.py"))
-          if len(tests) < 7:
+          tests.extend([Path("packaging/tests/test_developer_workspace.py"),
+                        Path("packaging/tests/test_developer_chat.py"),
+                        Path("packaging/tests/test_developer_generation.py")])
+          if len(tests) < 10:
               raise SystemExit("Missing required self-improvement test files")
           for path in tests:
               print("Checking", path, flush=True)
