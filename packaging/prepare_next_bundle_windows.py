@@ -89,7 +89,7 @@ if not old_id or old_id != new_id:
 
 required = {
     "developer_chat.py", "developer_generation.py",
-    "developer_workspace.py", "engine_manager.py",
+    "developer_workspace.py", "project_static_check.py", "engine_manager.py",
     "message_copy.py", "command_palette.py", "html_quality.py",
     "project_revision.py", "project_browser.py", "falcon.py",
 }
