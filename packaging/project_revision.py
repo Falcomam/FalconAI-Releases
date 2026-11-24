@@ -1,8 +1,9 @@
 """Review-first, rollback-capable edits of Falcon-owned developer projects.
 
-Only existing, explicitly reviewed source files in the developer_projects
-workspace may change. No model-provided paths are trusted; no code is run.
-Backups are outside the project and retain exact original file bytes.
+Only explicitly reviewed source files in the developer_projects workspace
+may change or be added. Deletion and renaming are forbidden. No model-provided
+paths are trusted; no code is run. Backups are outside the project and retain
+exact original file bytes.
 """
 from __future__ import annotations
 
@@ -111,7 +112,7 @@ def load_project(name, *, workspace=projects.WORKSPACE):
 
 
 def review_revision(base, new_plan):
-    """Verify replacement from model uses EXACT same name/kind/file paths."""
+    """Review existing-file updates and safe additions; never delete or rename."""
     if not isinstance(base, dict) or "plan" not in base:
         raise projects.ProjectError("Missing original reviewed project snapshot")
     original = base["plan"]
@@ -120,21 +121,25 @@ def review_revision(base, new_plan):
     proposed = projects.review_proposal(new_plan)
     if proposed["name"] != original["name"] or proposed["kind"] != original["kind"]:
         raise projects.ProjectError("Revisions cannot rename or change the project type")
-    if set(proposed["files"]) != set(original["files"]):
-        raise projects.ProjectError("Revisions cannot add, delete or rename files in this version")
-    changed = tuple(path for path in original["files"]
+    if not set(original["files"]).issubset(proposed["files"]):
+        raise projects.ProjectError("Revisions cannot delete or rename existing files")
+    added = tuple(path for path in proposed["files"]
+                  if path not in original["files"])
+    updated = tuple(path for path in original["files"]
                     if original["files"][path] != proposed["files"][path])
+    changed = updated + added
     if not changed:
         raise projects.ProjectError("The proposed revision did not change any files")
     lines = []
     for path in changed:
-        before = original["files"][path].splitlines(keepends=True)
+        before = original["files"][path].splitlines(keepends=True) if path in original["files"] else []
         after = proposed["files"][path].splitlines(keepends=True)
         lines.extend(difflib.unified_diff(
-            before, after, fromfile="before/" + path, tofile="after/" + path,
-            lineterm="\n", n=3))
+            before, after, fromfile=("before/" + path if path in original["files"] else "/dev/null"),
+            tofile="after/" + path, lineterm="\n", n=3))
     diff_text = "".join(lines)
-    return {"proposal": proposed, "changed": changed, "diff": diff_text,
+    return {"proposal": proposed, "changed": changed, "added": added,
+            "updated": updated, "diff": diff_text,
             "base_fingerprint": base["fingerprint"],
             "new_fingerprint": proposed["fingerprint"],
             "quality_warnings": proposed.get("quality_warnings", ())}
@@ -145,6 +150,48 @@ def _verify_current(name, expected, workspace):
     if current["fingerprint"] != expected:
         raise projects.ProjectError("Saved project changed since review. Start a new edit; no files overwritten.")
     return current
+
+
+def _validate_target_parent(project, target):
+    """Check all existing parent path components for unsafe redirections."""
+    relative = target.relative_to(project).parts[:-1]
+    current = project
+    for part in relative:
+        current = current / part
+        if projects._reparse(current) or (current.exists() and not current.is_dir()):
+            raise projects.ProjectError("Unsafe destination directory")
+
+
+def _create_parents_checked(project, target, created):
+    """Create missing directories without following existing symlinks."""
+    current = project
+    for part in target.relative_to(project).parts[:-1]:
+        current = current / part
+        if projects._reparse(current):
+            raise projects.ProjectError("Redirected destination folder")
+        if not current.exists():
+            current.mkdir(exist_ok=False)
+            created.append(current)
+        if projects._reparse(current) or not current.is_dir():
+            raise projects.ProjectError("Unsafe destination directory")
+
+
+def _remove_empty_folders(folders, stop=None):
+    """Clean up only directories that were created/emptied by this operation."""
+    seen = set()
+    for directory in reversed(folders):
+        current = directory
+        while current not in seen and (stop is None or current != stop):
+            seen.add(current)
+            if projects._reparse(current):
+                break
+            try:
+                current.rmdir()
+            except OSError:
+                break
+            if stop is None:
+                break
+            current = current.parent
 
 
 def _safe_backup_root(workspace, name):
@@ -161,11 +208,11 @@ def _safe_backup_root(workspace, name):
 
 
 def save_revision_approved(base, new_plan, approved_fingerprint, *, workspace=projects.WORKSPACE):
-    """Backup exact originals and replace only changed existing files.
+    """Backup existing changes; exclusively create new files after approval.
 
-    Require full revision fingerprint and original content snapshot. Every
-    target must still match the original on disk before any file replacement.
-    On a write failure, attempt rollback from the byte-for-byte backup.
+    Require exact proposal fingerprint and full original content snapshot.
+    No generated file is executed. In the event of a write failure, attempt
+    restoring original files and removing only our newly created files.
     """
     reviewed = review_revision(base, new_plan)
     if reviewed["new_fingerprint"] != approved_fingerprint:
@@ -178,11 +225,18 @@ def save_revision_approved(base, new_plan, approved_fingerprint, *, workspace=pr
     backup.mkdir(exist_ok=False)
     originals = base["plan"]["files"]
     changes = reviewed["changed"]
+    added = set(reviewed["added"])
     old_payloads = {}
+    created_folders = []
     try:
         for path in changes:
             parts = projects._check_path(path)
             target = project.joinpath(*parts)
+            if path in added:
+                _validate_target_parent(project, target)
+                if target.exists() or target.is_symlink():
+                    raise projects.ProjectError("New file already exists; refusing overwrite")
+                continue
             if not target.is_file() or projects._reparse(target):
                 raise projects.ProjectError("Project target redirected before edit")
             payload = target.read_bytes()
@@ -193,10 +247,11 @@ def save_revision_approved(base, new_plan, approved_fingerprint, *, workspace=pr
             b.parent.mkdir(parents=True, exist_ok=True)
             with b.open("xb") as f:
                 f.write(payload)
-        # Do not write any changes until every old file has been backed up.
+        # All existing changed files are backed up before any writes begin.
         metadata = {
             "name": name, "base_fingerprint": reviewed["base_fingerprint"],
             "new_fingerprint": reviewed["new_fingerprint"], "changed": list(changes),
+            "added": list(reviewed["added"]),
         }
         with (backup / "revision.json").open("x", encoding="utf-8") as f:
             json.dump(metadata, f, ensure_ascii=False, indent=2)
@@ -204,6 +259,17 @@ def save_revision_approved(base, new_plan, approved_fingerprint, *, workspace=pr
         try:
             for path in changes:
                 target = project.joinpath(*projects._check_path(path))
+                if path in added:
+                    _create_parents_checked(project, target, created_folders)
+                    if target.exists() or target.is_symlink():
+                        raise projects.ProjectError("New file appeared during save; refusing overwrite")
+                    # 'xb' is exclusive on both Windows and POSIX. In particular,
+                    # never call os.replace on a model-proposed new destination.
+                    payload = reviewed["proposal"]["files"][path].encode("utf-8")
+                    with target.open("xb") as f:
+                        written.append(path)
+                        f.write(payload)
+                    continue
                 if projects._reparse(target) or target.read_bytes() != old_payloads[path]:
                     raise projects.ProjectError("Project changed while writing; rolling back")
                 staged = target.parent / (".falcon-stage-" + uuid.uuid4().hex + ".tmp")
@@ -216,19 +282,28 @@ def save_revision_approved(base, new_plan, approved_fingerprint, *, workspace=pr
                         staged.unlink()
                 written.append(path)
         except Exception:
+            # Back out only writes that this operation actually completed. A
+            # changed user file must never be removed just for convenience.
             for path in reversed(written):
                 target = project.joinpath(*projects._check_path(path))
-                if not projects._reparse(target):
-                    try:
+                if projects._reparse(target):
+                    continue
+                try:
+                    if path in added:
+                        if (target.is_file() and target.read_bytes() ==
+                                reviewed["proposal"]["files"][path].encode("utf-8")):
+                            target.unlink()
+                    else:
                         restore = target.parent / (".falcon-restore-" + uuid.uuid4().hex + ".tmp")
                         restore.write_bytes(old_payloads[path])
                         os.replace(restore, target)
-                    except OSError:
-                        # Backups remain on disk for user-led recovery.
-                        pass
+                except OSError:
+                    # Backups are left for explicit user recovery.
+                    pass
+            _remove_empty_folders(created_folders)
             raise
         return {"project": str(project), "backup_id": backup_id,
-                "changed": changes, "executed": False}
+                "changed": changes, "added": reviewed["added"], "executed": False}
     except BaseException:
         # Retain backup even if only partly staged, for diagnostics and
         # recovery; never recursively delete a directory around user files.
@@ -255,12 +330,16 @@ def rollback_revision(name, backup_id, *, workspace=projects.WORKSPACE):
         record = json.loads(metadata.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise projects.ProjectError("Backup metadata unreadable") from exc
-    if record.get("name") != name or not isinstance(record.get("changed"), list):
+    if (record.get("name") != name or not isinstance(record.get("changed"), list)
+            or not isinstance(record.get("added", []), list)):
         raise projects.ProjectError("Backup does not match project")
     current = _verify_current(name, record.get("new_fingerprint"), workspace)
     project = _guard_project(name, workspace)
     payloads = {}
-    if not record["changed"] or len(set(record["changed"])) != len(record["changed"]):
+    added = set(record.get("added", []))
+    if (not record["changed"] or len(set(record["changed"])) != len(record["changed"])
+            or len(added) != len(record.get("added", []))
+            or not added.issubset(record["changed"])):
         raise projects.ProjectError("Backup has duplicate or missing changed files")
     original_plan = {
         "name": current["plan"]["name"], "kind": current["plan"]["kind"],
@@ -268,9 +347,15 @@ def rollback_revision(name, backup_id, *, workspace=projects.WORKSPACE):
     }
     for path in record["changed"]:
         target = project.joinpath(*projects._check_path(path))
+        if path not in original_plan["files"] or projects._reparse(target):
+            raise projects.ProjectError("Backup contents are unsafe")
+        if path in added:
+            # These files did not exist before the revision. They can be
+            # removed only if the entire project matches the saved revision.
+            original_plan["files"].pop(path)
+            continue
         backed = base.joinpath(*projects._check_path(path))
-        if path not in original_plan["files"] or projects._reparse(backed) or \
-                not backed.is_file() or projects._reparse(target):
+        if projects._reparse(backed) or not backed.is_file():
             raise projects.ProjectError("Backup contents are unsafe")
         raw = backed.read_bytes()
         if len(raw) > projects.MAX_BYTES_PER_FILE:
@@ -293,5 +378,16 @@ def rollback_revision(name, backup_id, *, workspace=projects.WORKSPACE):
         finally:
             if temp.exists():
                 temp.unlink()
+    empty_folders = []
+    for path in added:
+        target = project.joinpath(*projects._check_path(path))
+        _validate_target_parent(project, target)
+        if target.is_file() and not projects._reparse(target):
+            target.unlink()
+            if target.parent != project:
+                empty_folders.append(target.parent)
+    # Remove directories only if empty; never remove later user files.
+    _remove_empty_folders(empty_folders, stop=project)
     _verify_current(name, record.get("base_fingerprint"), workspace)
-    return {"project": str(project), "restored": tuple(payloads), "executed": False}
+    return {"project": str(project), "restored": tuple(payloads),
+            "removed_added": tuple(sorted(added)), "executed": False}
