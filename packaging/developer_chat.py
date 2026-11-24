@@ -285,7 +285,8 @@ class ChatFeatures:
                     )
                 self.say("Gaming Mode ON. New chat and project-generation requests "
                          "are paused in the staged Falcon interface. " + suffix +
-                         " This does not guarantee game FPS and cannot pause other apps.")
+                         " Other Ollama apps sharing those models may need to reload them. "
+                         "This does not guarantee game FPS or pause other apps.")
             self._launch("Entering Gaming Mode…", work, complete)
             return
         if low in ("status", "list", "coding"):
@@ -301,7 +302,8 @@ class ChatFeatures:
                 lines = list(result["models"])
                 ready = selected in lines
                 effective = coder if coder in lines else selected
-                self.app.set_status(("Ready • " if ready else "AI Offline • Model missing") + selected)
+                self.app.set_status("Gaming Mode ON • AI paused" if gaming_mode.enabled() else
+                                    (("Ready • " if ready else "AI Offline • Model missing") + selected))
                 coding_note = ("\nCoding model: " + coder +
                                (" (installed)" if coder in lines else
                                 " (missing; chat fallback " + effective + ")"))
