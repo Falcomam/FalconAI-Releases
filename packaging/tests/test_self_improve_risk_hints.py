@@ -27,6 +27,19 @@ class RiskHintTests(unittest.TestCase):
         self.assertFalse(found["manual_review_required"])
         self.assertTrue(found["advisory_only"])
 
+    def test_common_aliases_and_path_writes_are_flagged(self):
+        source = ("import subprocess as sp\n"
+                  "from subprocess import Popen as launch\n"
+                  "sp.run(['echo'])\n"
+                  "launch(['echo'])\n"
+                  "from pathlib import Path\n"
+                  "Path('output').write_text('data')\n")
+        findings = hints.inspect_python(source)["indicators"]
+        labels = [entry["indicator"] for entry in findings]
+        self.assertIn("high_impact_call:subprocess.run", labels)
+        self.assertIn("high_impact_call:subprocess.Popen", labels)
+        self.assertTrue(any("write_text" in label for label in labels))
+
     def test_bounded_findings(self):
         found = hints.inspect_python("exec('pass')\n" * 60)
         self.assertEqual(len(found["indicators"]), 40)
