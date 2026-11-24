@@ -1,5 +1,15 @@
 # Falcon Ai — Consolidated development backlog (2026-11-24)
 
+## Verified v13.9.1 user acceptance and next self-improvement work (2026-11-24)
+
+- User installed v13.9.1 and supplied a support report showing **13/13 packaged diagnostics passed**. Auto Improve correctly reports that legacy source-file upgrades are blocked for the installed EXE; this is an intentional safety restriction, not a crash.
+- Published verified v13.9.1 Windows update: https://github.com/Falcomam/FalconAI-Releases/releases/tag/v13.9.1 ; installer pipeline succeeded with real prior-version upgrade, clean install and data preservation: https://github.com/Falcomam/FalconAI-Releases/actions/runs/45503489494.
+- **Development-only, not installed:** `packaging/self_improve_proposals.py` reviews bounded source edits as inert text with Python/JSON syntax checks, readable unified diffs and SHA-256 proposal fingerprints.
+- **Development-only, not installed:** `packaging/self_improve_review_bridge.py` requires a trusted caller-supplied source snapshot and checks the exact baseline digest and reviewed proposal fingerprint; it rejects stale, fabricated or altered source. It neither fetches installed code nor executes or writes proposals.
+- Tests: `packaging/tests/test_self_improve_proposals.py` and `test_self_improve_review_bridge.py`; native Windows CI workflow `validate-self-improve-proposals.yml`. Do not claim that future run succeeded until its conclusion is checked.
+- **Next integration gate:** design a bounded trusted source reader and explicit GUI review flow, then separate permission-gated isolated tests/builds; no self-installation or unrestricted code execution. Keep these components off the packaged runtime until full Windows release gates pass.
+
+
 **User direction:** Work in substantial, tested batches. Stay inside ONE Falcon Ai and ONE main chat window. Don't release or notify for tiny progress. Let the verified-test-ready release watcher announce an actual major Windows update. **Latest verified release: v13.9.0 (2026-11-24); user's installed version may still be v13.8.0 until updated.**
 
 ## Latest completed bundle: Falcon Ai V13.9.0 — released, Windows verified
