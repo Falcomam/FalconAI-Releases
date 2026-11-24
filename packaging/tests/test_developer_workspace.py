@@ -113,6 +113,23 @@ class DeveloperWorkspaceTests(unittest.TestCase):
             with self.subTest(kind=kind), self.assertRaises(dev.ProjectError):
                 dev.review_proposal(proposal(kind=kind))
 
+    def test_generated_json_rejects_ambiguous_data(self):
+        bad = [
+            '{"one": 1, "one": 2}',
+            '{"number": NaN}',
+            '{"number": Infinity}',
+        ]
+        for raw in bad:
+            with self.subTest(raw=raw), self.assertRaisesRegex(dev.ProjectError, "Invalid JSON"):
+                dev.review_proposal(proposal({"config.json": raw}))
+
+    def test_toml_validation_blocks_malformed_generated_files(self):
+        good = 'name = "falcon"\nversion = "1.0"\n'
+        result = dev.review_proposal(proposal({"config.toml": good}))
+        self.assertEqual(result["file_count"], 1)
+        with self.assertRaisesRegex(dev.ProjectError, "Invalid TOML"):
+            dev.review_proposal(proposal({"config.toml": "name = [\n"}))
+
     def test_website_and_fabric_starters_supported_as_inert_files(self):
         for kind, files in [
             ("website", {"index.html": "<!doctype html><html><head><meta charset=\"UTF-8\"><title>Falcon</title></head><body><h1>Hi</h1></body></html>",
