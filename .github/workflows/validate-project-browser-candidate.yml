@@ -9,6 +9,9 @@ on:
       - "packaging/tests/test_project_revision.py"
       - "packaging/tests/test_project_revision_chat.py"
       - "packaging/prepare_project_browser_candidate.py"
+      - "packaging/project_targeted_edits.py"
+      - "packaging/tests/test_project_targeted_edits.py"
+      - "packaging/tests/test_project_targeted_chat.py"
       - "packaging/tests/test_project_browser.py"
       - "packaging/tests/test_project_browser_chat.py"
       - ".github/workflows/validate-project-browser-candidate.yml"
@@ -94,3 +97,5 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Project revisions regression failed' }
           python -m unittest discover -s packaging/tests -p test_project_browser_chat.py -v
           if ($LASTEXITCODE -ne 0) { throw 'Saved project browser chat acceptance failed' }
+          python -m unittest discover -s packaging/tests -p test_project_targeted_chat.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'Focused edit one-chat acceptance failed' }
