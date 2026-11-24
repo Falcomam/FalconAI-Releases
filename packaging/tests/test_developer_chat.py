@@ -71,6 +71,19 @@ class DeveloperChatTests(unittest.TestCase):
         self.assertIn("Describe the project", self.app.messages[-1][1])
         self.assertIsNone(self.chat.pending)
 
+    def test_clipped_project_review_never_allows_approval(self):
+        p = project()
+        p["files"]["main.py"] = "value = '" + "A" * 7000 + "'\n"
+        review = workspace.review_proposal(p)
+        self.chat.pending = {"plan": p, "review": review, "reviewed": False}
+        self.chat.dispatch("/project review")
+        self.assertFalse(self.chat.pending["reviewed"])
+        self.assertIn("Approval is BLOCKED", self.app.messages[-1][1])
+        with patch.object(workspace, "save_approved",
+                          side_effect=AssertionError("no file writes")):
+            self.chat.dispatch("/project approve")
+        self.assertIn("Review the proposed files first", self.app.messages[-1][1])
+
     def test_static_check_does_not_grant_review_or_execute(self):
         p = project()
         info = workspace.review_proposal(p)
