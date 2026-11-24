@@ -29,8 +29,8 @@ class SourceSnapshotTests(unittest.TestCase):
 
     def test_end_to_end_review_and_recheck_detects_source_edit(self):
         changes = {"packaging/engine.py": {
-            "before": "def speed():\\n    return 1\\n",
-            "after": "def speed():\\n    return 2\\n",
+            "before": "def speed():\n    return 1\n",
+            "after": "def speed():\n    return 2\n",
         }}
         reviewed = bridge.prepare_from_checkout(changes, trusted_checkout=self.root)
         verified = bridge.verify_from_checkout(
@@ -39,7 +39,7 @@ class SourceSnapshotTests(unittest.TestCase):
         self.assertTrue(verified["source_snapshot_verified"])
         self.assertFalse(verified["installation_allowed"])
         (self.root / "packaging" / "engine.py").write_text(
-            "def speed():\\n    return 10\\n", encoding="utf-8")
+            "def speed():\n    return 10\n", encoding="utf-8")
         with self.assertRaisesRegex(proposals.ProposalError, "Stale or fabricated"):
             bridge.verify_from_checkout(
                 changes, trusted_checkout=self.root,
