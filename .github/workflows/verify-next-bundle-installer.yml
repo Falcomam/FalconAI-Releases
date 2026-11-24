@@ -6,6 +6,9 @@ on:
       - ".github/workflows/verify-next-bundle-installer.yml"
       - "packaging/prepare_next_bundle_windows.py"
       - "packaging/prepare_project_revision_candidate.py"
+      - "packaging/prepare_project_browser_candidate.py"
+      - "packaging/project_targeted_edits.py"
+      - "packaging/tests/test_project_targeted_chat.py"
       - "packaging/prepare_single_chat_candidate.py"
   workflow_dispatch:
 permissions:
