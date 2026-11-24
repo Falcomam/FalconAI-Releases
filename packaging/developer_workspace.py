@@ -112,6 +112,8 @@ def parse_proposal(raw):
 
     try:
         plan = _strict_json_loads(payload)
+    except json.JSONDecodeError as exc:
+        raise ProjectError(f"Model JSON syntax error at line {exc.lineno}, column {exc.colno}") from exc
     except (TypeError, ValueError) as exc:
         raise ProjectError("The coding model must return one unambiguous JSON project") from exc
     return review_proposal(plan)
@@ -155,6 +157,8 @@ def review_proposal(plan):
         if path.lower().endswith(".json"):
             try:
                 _strict_json_loads(contents)
+            except json.JSONDecodeError as exc:
+                raise ProjectError(f"Invalid JSON in {path}, line {exc.lineno}, column {exc.colno}") from exc
             except ValueError as exc:
                 raise ProjectError(f"Invalid JSON in {path}") from exc
         if path.lower().endswith(".toml"):
