@@ -29,6 +29,17 @@ def replace_one(path, old, new):
     file.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
+# Central planner guard: UI pause alone is insufficient when alternate agent
+# entrypoints exist. No model request may start through agent.ask_ollama in
+# explicit Gaming Mode. Other applications using Ollama are unaffected.
+replace_one("agent.py",
+    "    check_stop(cancel)\n    if model is None:\n",
+    "    check_stop(cancel)\n"
+    "    import gaming_mode\n"
+    "    if gaming_mode.enabled():\n"
+    "        raise RuntimeError('Gaming Mode ON: Falcon AI model work is paused. Type /engine gaming off to resume.')\n"
+    "    if model is None:\n")
+
 replace_one("falcon.py",
     "import engine_manager\n",
     "import engine_manager\nimport developer_chat\n")
