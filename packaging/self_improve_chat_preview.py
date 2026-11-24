@@ -19,10 +19,8 @@ def _visible(value):
                    else ("\\u%04x" % ord(char)) for char in value)
 
 
-def render(changes, *, trusted_checkout, trusted_sha256, preview_limit=MAX_PREVIEW):
-    """Produce a bounded, human-readable, unapproved source diff preview."""
-    if not isinstance(preview_limit, int) or not 1200 <= preview_limit <= MAX_PREVIEW:
-        raise proposals.ProposalError("Preview must remain bounded")
+def _build_body(changes, *, trusted_checkout, trusted_sha256):
+    """Build complete diff in bounded memory; never run or install source."""
     summary = test_plans.plan(changes, trusted_checkout=trusted_checkout,
                               trusted_sha256=trusted_sha256)
     reviewed = bridge.prepare_pinned_from_checkout(changes,
@@ -47,7 +45,33 @@ def render(changes, *, trusted_checkout, trusted_sha256, preview_limit=MAX_PREVI
         if hints:
             lines.append("Manual risk review: " + ", ".join(hints[:12]))
         lines.append("DIFF:\n" + _visible(item["diff"]))
-    body = "\n".join(lines)
+    return "\n".join(lines)
+
+
+def render(changes, *, trusted_checkout, trusted_sha256, preview_limit=MAX_PREVIEW):
+    """Produce a bounded preview; clipping never authorizes full review."""
+    if not isinstance(preview_limit, int) or not 1200 <= preview_limit <= MAX_PREVIEW:
+        raise proposals.ProposalError("Preview must remain bounded")
+    body = _build_body(changes, trusted_checkout=trusted_checkout,
+                       trusted_sha256=trusted_sha256)
     if len(body) > preview_limit:
-        return body[:preview_limit - 110] + "\n[Preview truncated: exact full proposal remains unchanged; review source before approval.]"
+        return (body[:preview_limit - 110] +
+                "\n[Preview truncated: exact full proposal remains unchanged; review source before approval.]")
     return body
+
+
+def render_pages(changes, *, trusted_checkout, trusted_sha256, page_size=12000):
+    """Return every diff character in bounded pages, no hidden omissions.
+
+    Page navigation and approval must be handled by a separate review session.
+    No code execution, installation or local filesystem writes happen here.
+    """
+    if not isinstance(page_size, int) or not 1200 <= page_size <= MAX_PREVIEW:
+        raise proposals.ProposalError("Unsafe review page size")
+    body = _build_body(changes, trusted_checkout=trusted_checkout,
+                       trusted_sha256=trusted_sha256)
+    pages = tuple(body[start:start + page_size]
+                  for start in range(0, len(body), page_size))
+    if not pages or len(pages) > 256:
+        raise proposals.ProposalError("Too many review pages for a safe approval")
+    return pages
