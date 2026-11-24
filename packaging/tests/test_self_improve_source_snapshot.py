@@ -18,7 +18,7 @@ class SourceSnapshotTests(unittest.TestCase):
         self.root = Path(self.tmp.name) / "checkout"
         (self.root / "packaging").mkdir(parents=True)
         (self.root / snapshots.MARKER).write_text("# Falcon backlog", encoding="utf-8")
-        (self.root / "packaging" / "engine.py").write_text("def speed():\n    return 1\n", encoding="utf-8")
+        (self.root / "packaging" / "engine.py").write_bytes(b"def speed():\n    return 1\n")
 
     def test_safe_read_and_proposal_baseline(self):
         snapshot = snapshots.read_snapshot(self.root, ["packaging/engine.py"])
@@ -38,8 +38,8 @@ class SourceSnapshotTests(unittest.TestCase):
             reviewed_fingerprint=reviewed["fingerprint"])
         self.assertTrue(verified["source_snapshot_verified"])
         self.assertFalse(verified["installation_allowed"])
-        (self.root / "packaging" / "engine.py").write_text(
-            "def speed():\n    return 10\n", encoding="utf-8")
+        (self.root / "packaging" / "engine.py").write_bytes(
+            b"def speed():\n    return 10\n")
         with self.assertRaisesRegex(proposals.ProposalError, "Stale or fabricated"):
             bridge.verify_from_checkout(
                 changes, trusted_checkout=self.root,
