@@ -1,0 +1,90 @@
+name: Project Falcon V13.6.4 - Mini Monitor and shared restart
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/publish-v1364.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: falcon-v1364-release
+  cancel-in-progress: false
+
+jobs:
+  build-test-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out verified source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Tk runtime for regression suite
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libtk8.6 libtcl8.6
+      - name: Rebuild stable Falcon 13.6.1 baseline and apply restart fix
+        run: |
+          python patches/v13.6/apply.py
+          python patches/v13.6.1/apply.py
+          python patches/v13.6.2/apply.py
+          python patches/v13.6.4/apply.py
+      # Keep caches, virtual environments and diagnostic logs out of release ZIPs.
+      - name: Compile and run regression tests
+        run: |
+          python -m compileall -q build/Falcon_AI_V13_6_4
+          cd build/Falcon_AI_V13_6_4
+          python -m unittest discover -s tests -q
+      - name: Package and validate update
+        run: |
+          python - <<'PY'
+          import hashlib, pathlib, sys, zipfile
+          app=pathlib.Path("build/Falcon_AI_V13_6_4")
+          assert (app/"RELEASE_VERSION.txt").read_text().strip()=="13.6.4"
+          sys.path.insert(0,str(app.resolve()))
+          import release_updates
+          assert release_updates.CURRENT_VERSION==(13,6,3)
+          out=pathlib.Path("dist")
+          out.mkdir(exist_ok=True)
+          archive=out/"Falcon_AI_Update.zip"
+          with zipfile.ZipFile(archive,"w",compression=zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+              for f in sorted(app.rglob("*")):
+                  if (not f.is_file() or f.suffix in {".pyc",".log"} or
+                      any(p in {".git",".venv","__pycache__",".pytest_cache"} for p in f.parts)):
+                      continue
+                  z.write(f,"Falcon_AI_V13_6_4/"+f.relative_to(app).as_posix())
+          raw=archive.read_bytes()
+          release_updates.verify_archive(raw,(13,6,3))
+          digest=hashlib.sha256(raw).hexdigest()
+          (out/"SHA256SUMS.txt").write_text(digest+"  Falcon_AI_Update.zip\n")
+          (out/"RELEASE_NOTES.txt").write_text(
+              "Project Falcon V13.6.4 - Mini Monitor and automatic restart repair\n\n"
+              "- Retains all V13.6.1 personality, approval, update and security features.\n"
+              "- Logs when the detached installer starts and each restart attempt.\n"
+              "- Mini Monitor: compact optional always-on-top status, Open and STOP controls.\n"
+              "- Uses verified restart helper for both manual and update restarts.\n"              "- Fixes PowerShell reserved HOME variable; keeps rollback backup.\n"
+              "- Does not check every five minutes or update automatically.\n"
+              "- Windows GUI relaunch still needs verification on your computer.\n"
+              "- Recovery: run %LOCALAPPDATA%\\Programs\\FalconAI\\START_HERE.bat\n"
+          )
+          print("Verified ZIP:",len(raw),"SHA-256:",digest)
+          PY
+      - name: Publish only if tests and archive verification pass
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v13.6.4 >/dev/null 2>&1; then
+            echo 'Refusing to overwrite existing release v13.6.4'
+            exit 1
+          fi
+          gh release create v13.6.4 dist/Falcon_AI_Update.zip dist/SHA256SUMS.txt \
+            --title 'Project Falcon V13.6.4 - Mini Monitor + Restart Repair' \
+            --notes-file dist/RELEASE_NOTES.txt --latest
