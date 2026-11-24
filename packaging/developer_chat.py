@@ -286,7 +286,8 @@ class ChatFeatures:
             if plan is None:
                 return
             self.pending = {"plan": plan,
-                            "review": projects.review_proposal(plan)}
+                            "review": projects.review_proposal(plan),
+                            "reviewed": False}
             info = self.pending["review"]
             self.app.set_status("Ready • Project proposal")
             self.say("Project proposal ready (NOT saved or executed).\n"
@@ -313,6 +314,7 @@ class ChatFeatures:
                             ("\n[File preview shortened. Use /project show " + path + "]"
                              if len(body) > 5000 else ""))
         # Avoid dumping unbounded text into a single UI message.
+        self.pending["reviewed"] = True
         self.say("REVIEW PROJECT: " + info["name"] +
                  "\nSHA-256 proposal fingerprint: " + info["fingerprint"] +
                  "\nFiles are source text only; no code was run.\n\n" +
@@ -338,6 +340,9 @@ class ChatFeatures:
             return
         if self.app.busy:
             self.say("Finish or STOP the current task first.")
+            return
+        if not self.pending.get("reviewed", False):
+            self.say("Review the proposed files first using /project review. Nothing was saved.")
             return
         info = self.pending
         try:
