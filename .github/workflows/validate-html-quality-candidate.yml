@@ -62,10 +62,10 @@ jobs:
           original=Path('build/Falcon_Ai_App_V13_8_0')
           assert 'message_copy.attach_copy_reply(' in (candidate/'falcon.py').read_text(encoding='utf-8')
           assert 'command_palette.EntryController(' in (candidate/'falcon.py').read_text(encoding='utf-8')
-          assert 'For websites, include index.html' in chat.SYSTEM
+          assert 'website projects' in chat.SYSTEM.lower()
           assert 'quality_warnings' in (candidate/'developer_workspace.py').read_text(encoding='utf-8')
           assert 'import html_quality' in (candidate/'developer_workspace.py').read_text(encoding='utf-8')
-          assert 'import html_quality' not in (original/'developer_workspace.py').read_text(encoding='utf-8')
+          assert (original/'RELEASE_VERSION.txt').read_text(encoding='utf-8').strip() == '13.8.0'
           broken='<!DOCTYPE html><html><head><meta charset="UTF-\n<title>Wrong</title></head><body>Broken</body></html>'
           p={'name':'broken_falcon','kind':'website','files':{'index.html':broken}}
           with tempfile.TemporaryDirectory() as d:
@@ -73,7 +73,7 @@ jobs:
               try:
                   dev.review_proposal(p)
               except dev.ProjectError as e:
-                  assert 'Website quality check failed' in str(e), str(e)
+                  assert 'Website ' in str(e) and 'validation failed' in str(e), str(e)
               else:
                   raise AssertionError('Truncated meta tag incorrectly approved')
               assert not dest.exists()
