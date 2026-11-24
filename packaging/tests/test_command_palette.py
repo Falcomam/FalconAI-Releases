@@ -48,6 +48,10 @@ class CommandPaletteTests(unittest.TestCase):
         self.assertEqual(len(cp.COMMANDS), len(set(cp.COMMANDS)))
         self.assertIn("/project review", cp.COMMANDS)
         self.assertIn("/engine use ", cp.COMMANDS)
+        self.assertIn("/engine use-code ", cp.COMMANDS)
+        self.assertIn("/engine coding", cp.COMMANDS)
+        self.assertIn("/project check", cp.COMMANDS)
+        self.assertNotIn("/upgrade ", cp.COMMANDS)
         self.assertIn("/stop", cp.COMMANDS)
 
     def test_single_completion(self):
@@ -66,7 +70,7 @@ class CommandPaletteTests(unittest.TestCase):
 
     def test_shift_tab_reverse(self):
         tab = cp.TabCompletion()
-        self.assertEqual(tab.complete("/engine ", reverse=True), "/engine start")
+        self.assertEqual(tab.complete("/engine ", reverse=True), "/engine coding")
         self.assertEqual(tab.complete("/engine start", reverse=True), "/engine use ")
 
     def test_no_autocomplete_freeform_text_or_arguments(self):
@@ -75,6 +79,16 @@ class CommandPaletteTests(unittest.TestCase):
                      "/project website create a game", "/do open Notepad and type Hello"):
             with self.subTest(text=text):
                 self.assertIsNone(tab.complete(text))
+
+    def test_new_coding_shortcut_only_inserts_text(self):
+        entry = FakeEntry()
+        hint = FakeHint()
+        controller = cp.EntryController(entry, hint)
+        controller.insert("/engine use-code ")
+        self.assertEqual(entry.text, "/engine use-code ")
+        self.assertFalse(hasattr(controller, "dispatch"))
+        controller.insert("/project check")
+        self.assertEqual(entry.text, "/project check")
 
     def test_no_implicit_dispatch_when_menu_shortcut_selected(self):
         e = FakeEntry()
