@@ -79,7 +79,8 @@ def prepare_pinned_from_checkout(changes, *, trusted_checkout, trusted_sha256):
     """Review exact sources pinned by trusted CI metadata, never model hashes."""
     import self_improve_source_snapshot as snapshots
 
-    if not isinstance(changes, dict) or set(changes) != set(trusted_sha256):
+    if (not isinstance(changes, dict) or not isinstance(trusted_sha256, dict)
+            or set(changes) != set(trusted_sha256)):
         raise proposals.ProposalError("Changed file set must match trusted pinned source set")
     snapshot = snapshots.read_pinned_snapshot(trusted_checkout, trusted_sha256)
     return prepare(changes, snapshot)
@@ -90,7 +91,8 @@ def verify_pinned_from_checkout(changes, *, trusted_checkout,
     """Re-read and re-pin exact baseline just before any future approval UI."""
     import self_improve_source_snapshot as snapshots
 
-    if not isinstance(changes, dict) or set(changes) != set(trusted_sha256):
+    if (not isinstance(changes, dict) or not isinstance(trusted_sha256, dict)
+            or set(changes) != set(trusted_sha256)):
         raise proposals.ProposalError("Changed file set must match trusted pinned source set")
     snapshot = snapshots.read_pinned_snapshot(trusted_checkout, trusted_sha256)
     return verify_review(changes, snapshot, reviewed_fingerprint)
