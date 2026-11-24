@@ -18,6 +18,7 @@ from pathlib import Path
 import re
 import stat
 import html_quality
+import site_design_check
 
 BASE = Path(os.getenv("LOCALAPPDATA") or Path.home()) / "FalconAI"
 WORKSPACE = BASE / "developer_projects"
@@ -170,7 +171,8 @@ def review_proposal(plan):
     quality_warnings = []
     if kind == "website":
         try:
-            quality_warnings = html_quality.check_website(clean)
+            quality_warnings = list(html_quality.check_website(clean))
+            quality_warnings.extend(site_design_check.inspect(clean))
         except html_quality.WebsiteQualityError as exc:
             raise ProjectError("Website HTML validation failed: " + str(exc)) from exc
     canonical = json.dumps(
