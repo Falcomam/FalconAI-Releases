@@ -29,6 +29,8 @@ class ReviewSession:
         self._consent = False
         self._stopped = False
         self._events = []
+        self._pages_seen = set()
+        self._page_count = 0
 
     @property
     def state(self):
@@ -56,6 +58,8 @@ class ReviewSession:
         self._nonce = secrets.token_urlsafe(24)
         self._review_visible = False
         self._consent = False
+        self._pages_seen.clear()
+        self._page_count = 0
         self._events.append({"event": "proposal_submitted",
                              "fingerprint": self._fingerprint})
         return {"fingerprint": self._fingerprint, "state": self.state}
@@ -72,11 +76,48 @@ class ReviewSession:
         complete = "[Preview truncated:" not in output
         self._review_visible = complete
         self._consent = False
+        self._pages_seen = {0} if complete else set()
+        self._page_count = 1 if complete else 0
         self._events.append({"event": "review_displayed" if complete else "review_truncated",
                              "fingerprint": self._fingerprint})
         return {"text": output, "fingerprint": self._fingerprint,
                 "review_token": self._nonce if complete else None,
                 "review_complete": complete, "state": self.state}
+
+    def show_review_page(self, index):
+        """Page the full fingerprinted diff; all pages required for consent.
+
+        The human-facing UI must call this from actual navigation. Model output
+        must not simulate viewing pages or consent gestures.
+        """
+        if self._stopped or self._changes is None:
+            raise proposals.ProposalError("No active proposal to review")
+        pages = previews.render_pages(
+            self._changes, trusted_checkout=self._root,
+            trusted_sha256=self._pinned)
+        if not isinstance(index, int) or not 0 <= index < len(pages):
+            raise proposals.ProposalError("Review page is out of range")
+        bridge.verify_pinned_from_checkout(
+            self._changes, trusted_checkout=self._root,
+            trusted_sha256=self._pinned, reviewed_fingerprint=self._fingerprint)
+        if self._page_count not in (0, len(pages)):
+            raise proposals.ProposalError("Review pages changed; start review again")
+        self._page_count = len(pages)
+        self._pages_seen.add(index)
+        complete = len(self._pages_seen) == self._page_count
+        self._review_visible = complete
+        self._consent = False
+        self._events.append({"event": "review_page_displayed",
+                             "fingerprint": self._fingerprint,
+                             "page": index + 1, "page_count": len(pages),
+                             "review_complete": complete})
+        return {"text": "Review page " + str(index + 1) + "/" +
+                str(len(pages)) + "\n" + pages[index],
+                "page": index + 1, "page_count": len(pages),
+                "fingerprint": self._fingerprint,
+                "review_complete": complete,
+                "review_token": self._nonce if complete else None,
+                "state": self.state}
 
     def record_user_test_consent(self, *, review_token, fingerprint):
         """UI-side consent gate. Never route model-written text directly here.
@@ -118,6 +159,8 @@ class ReviewSession:
         self._review_visible = False
         self._consent = False
         self._stopped = True
+        self._pages_seen.clear()
+        self._page_count = 0
         self._events.append({"event": "session_stopped",
                              "consent_revoked": True})
         return {"state": "stopped", "tests_executed": False}
