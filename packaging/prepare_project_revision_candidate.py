@@ -128,7 +128,7 @@ replace_one(
             import agent
             plan = developer_generation.generate_with_one_retry(
                 kind=base["plan"]["kind"], messages=messages, model=model,
-                cancel=cancel, ask=agent.ask_ollama)
+                cancel=cancel, ask=agent.ask_ollama, token_limit=6500)
             if plan is None:
                 return None
             revision = revisions.review_revision(base, plan)
