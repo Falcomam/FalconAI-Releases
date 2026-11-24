@@ -155,6 +155,13 @@ class ProjectRevisionTests(unittest.TestCase):
             with self.subTest(path=path), self.assertRaises(dev.ProjectError):
                 edits.review_revision(original, new)
 
+    def test_cannot_add_file_that_changes_project_kind(self):
+        base = edits.load_project("myapp", workspace=self.workspace)
+        new = self.modified()
+        new["files"]["index.html"] = VALID_HTML
+        with self.assertRaisesRegex(dev.ProjectError, "project type"):
+            edits.review_revision(base, new)
+
     def test_new_folder_symlink_attack_is_blocked(self):
         original = edits.load_project("myapp", workspace=self.workspace)
         new = self.modified()
