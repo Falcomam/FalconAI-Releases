@@ -81,6 +81,39 @@ class ReviewSessionTests(unittest.TestCase):
             self.session.record_user_test_consent(
                 review_token="", fingerprint=shown["fingerprint"])
 
+    def test_large_proposal_requires_every_review_page(self):
+        large = {"engine.py": {
+            "before": self.changes["engine.py"]["before"],
+            "after": "def run():\n    return '" + "x" * 29000 + "'\n",
+        }}
+        self.session.submit(large)
+        summary = self.session.show_review()
+        self.assertFalse(summary["review_complete"])
+        first = self.session.show_review_page(0)
+        self.assertGreater(first["page_count"], 1)
+        self.assertIsNone(first["review_token"])
+        self.assertFalse(first["review_complete"])
+        with self.assertRaises(proposals.ProposalError):
+            self.session.record_user_test_consent(
+                review_token="not-yet", fingerprint=first["fingerprint"])
+        for index in range(1, first["page_count"]):
+            shown = self.session.show_review_page(index)
+        self.assertTrue(shown["review_complete"])
+        self.assertIsNotNone(shown["review_token"])
+        granted = self.session.record_user_test_consent(
+            review_token=shown["review_token"], fingerprint=shown["fingerprint"])
+        self.assertFalse(granted["tests_executed"])
+        self.assertEqual(granted["scope"], "request_isolated_tests_only")
+
+    def test_paged_review_rejects_out_of_range_and_stale_source(self):
+        self.session.submit(self.changes)
+        with self.assertRaises(proposals.ProposalError):
+            self.session.show_review_page(99)
+        self.session.show_review_page(0)
+        (self.root / "engine.py").write_bytes(b"def run():\n    return 10\n")
+        with self.assertRaises(proposals.ProposalError):
+            self.session.show_review_page(0)
+
     def test_stop_or_rejection_irreversibly_revokes(self):
         self.session.submit(self.changes)
         shown = self.session.show_review()
