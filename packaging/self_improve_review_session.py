@@ -31,6 +31,7 @@ class ReviewSession:
         self._events = []
         self._pages_seen = set()
         self._page_count = 0
+        self._cached_pages = None
 
     @property
     def state(self):
@@ -60,6 +61,7 @@ class ReviewSession:
         self._consent = False
         self._pages_seen.clear()
         self._page_count = 0
+        self._cached_pages = None
         self._events.append({"event": "proposal_submitted",
                              "fingerprint": self._fingerprint})
         return {"fingerprint": self._fingerprint, "state": self.state}
@@ -92,11 +94,15 @@ class ReviewSession:
         """
         if self._stopped or self._changes is None:
             raise proposals.ProposalError("No active proposal to review")
-        pages = previews.render_pages(
-            self._changes, trusted_checkout=self._root,
-            trusted_sha256=self._pinned)
+        if self._cached_pages is None:
+            self._cached_pages = previews.render_pages(
+                self._changes, trusted_checkout=self._root,
+                trusted_sha256=self._pinned)
+        pages = self._cached_pages
         if not isinstance(index, int) or not 0 <= index < len(pages):
             raise proposals.ProposalError("Review page is out of range")
+        # The cached view is only a presentation optimization. Re-validate
+        # current pinned source before returning any page or test consent.
         bridge.verify_pinned_from_checkout(
             self._changes, trusted_checkout=self._root,
             trusted_sha256=self._pinned, reviewed_fingerprint=self._fingerprint)
@@ -161,6 +167,7 @@ class ReviewSession:
         self._stopped = True
         self._pages_seen.clear()
         self._page_count = 0
+        self._cached_pages = None
         self._events.append({"event": "session_stopped",
                              "consent_revoked": True})
         return {"state": "stopped", "tests_executed": False}
