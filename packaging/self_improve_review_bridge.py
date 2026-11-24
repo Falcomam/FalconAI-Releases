@@ -48,3 +48,28 @@ def verify_review(changes, source_snapshot, reviewed_fingerprint):
         "installation_allowed": False,
         "status": "review_fingerprint_verified_not_tested_or_approved",
     }
+
+
+def prepare_from_checkout(changes, *, trusted_checkout):
+    """Convenience review from a caller-selected development checkout.
+
+    The caller, never the language model, must supply a trusted checkout.
+    Files are read by the bounded read-only loader; no code executes.
+    This does not prove checkout authenticity or authorize deployment.
+    """
+    import self_improve_source_snapshot as snapshots
+
+    if not isinstance(changes, dict):
+        raise proposals.ProposalError("Source changes must be a mapping")
+    snapshot = snapshots.read_snapshot(trusted_checkout, list(changes))
+    return prepare(changes, snapshot)
+
+
+def verify_from_checkout(changes, *, trusted_checkout, reviewed_fingerprint):
+    """Re-read trusted sources at verification time to reject stale proposals."""
+    import self_improve_source_snapshot as snapshots
+
+    if not isinstance(changes, dict):
+        raise proposals.ProposalError("Source changes must be a mapping")
+    snapshot = snapshots.read_snapshot(trusted_checkout, list(changes))
+    return verify_review(changes, snapshot, reviewed_fingerprint)
