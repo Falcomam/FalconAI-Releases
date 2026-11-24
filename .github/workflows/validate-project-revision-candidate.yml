@@ -6,6 +6,7 @@ on:
       - "packaging/project_revision.py"
       - "packaging/prepare_project_revision_candidate.py"
       - "packaging/tests/test_project_revision.py"
+      - "packaging/tests/test_project_revision_chat.py"
       - ".github/workflows/validate-project-revision-candidate.yml"
   workflow_dispatch:
 permissions:
