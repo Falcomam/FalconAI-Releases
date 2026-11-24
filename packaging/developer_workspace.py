@@ -86,7 +86,7 @@ def parse_proposal(raw):
     payload = raw.strip()
     if payload.startswith("```"):
         match = re.fullmatch(
-            r"```(?:json)?[ \\t]*\\r?\\n(?P<body>.*?)\\r?\\n```",
+            r"```(?:json)?[ \t]*\r?\n(?P<body>.*?)\r?\n```",
             payload, flags=re.I | re.S)
         if not match:
             raise ProjectError("Only one complete JSON code fence is supported")
