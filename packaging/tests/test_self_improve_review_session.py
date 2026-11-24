@@ -66,7 +66,20 @@ class ReviewSessionTests(unittest.TestCase):
         with self.assertRaises(proposals.ProposalError):
             self.session.record_user_test_consent(
                 review_token=shown["review_token"], fingerprint=shown["fingerprint"])
-        self.assertFalse(self.session.test_plan.__self__._consent)
+        self.assertEqual(self.session.state, "reviewed")
+
+    def test_truncated_review_cannot_issue_consent_token(self):
+        large = {"engine.py": {
+            "before": self.changes["engine.py"]["before"],
+            "after": "def run():\n    return '" + "x" * 28000 + "'\n",
+        }}
+        self.session.submit(large)
+        shown = self.session.show_review()
+        self.assertFalse(shown["review_complete"])
+        self.assertIsNone(shown["review_token"])
+        with self.assertRaises(proposals.ProposalError):
+            self.session.record_user_test_consent(
+                review_token="", fingerprint=shown["fingerprint"])
 
     def test_stop_or_rejection_irreversibly_revokes(self):
         self.session.submit(self.changes)
