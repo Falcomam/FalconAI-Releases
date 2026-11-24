@@ -32,6 +32,13 @@ class PreviewTests(unittest.TestCase):
         self.assertIn("+    return 2", output)
         self.assertIn("Installed: NO", output)
 
+    def test_preview_preserves_unicode_and_escapes_terminal_controls(self):
+        value = "Falcon 🦅" + chr(27) + " safe"
+        cleaned = preview._visible(value)
+        self.assertIn("Falcon 🦅", cleaned)
+        self.assertNotIn(chr(27), cleaned)
+        self.assertIn(r"\\u001b", cleaned)
+
     def test_bad_pin_blocked(self):
         with self.assertRaises(proposals.ProposalError):
             preview.render(self.changes, trusted_checkout=self.root,
