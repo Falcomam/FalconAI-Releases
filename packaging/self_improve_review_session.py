@@ -15,6 +15,8 @@ import self_improve_review_bridge as bridge
 import self_improve_test_plan as test_plans
 import self_improve_proposals as proposals
 
+MAX_AUDIT_EVENTS = 256
+
 
 class ReviewSession:
     def __init__(self, *, trusted_checkout, trusted_sha256):
@@ -29,9 +31,16 @@ class ReviewSession:
         self._consent = False
         self._stopped = False
         self._events = []
+        self._dropped_events = 0
         self._pages_seen = set()
         self._page_count = 0
         self._cached_pages = None
+
+    def _log(self, record):
+        self._events.append(record)
+        if len(self._events) > MAX_AUDIT_EVENTS:
+            self._events.pop(0)
+            self._dropped_events += 1
 
     @property
     def state(self):
@@ -62,7 +71,7 @@ class ReviewSession:
         self._pages_seen.clear()
         self._page_count = 0
         self._cached_pages = None
-        self._events.append({"event": "proposal_submitted",
+        self._log({"event": "proposal_submitted",
                              "fingerprint": self._fingerprint})
         return {"fingerprint": self._fingerprint, "state": self.state}
 
@@ -80,7 +89,7 @@ class ReviewSession:
         self._consent = False
         self._pages_seen = {0} if complete else set()
         self._page_count = 1 if complete else 0
-        self._events.append({"event": "review_displayed" if complete else "review_truncated",
+        self._log({"event": "review_displayed" if complete else "review_truncated",
                              "fingerprint": self._fingerprint})
         return {"text": output, "fingerprint": self._fingerprint,
                 "review_token": self._nonce if complete else None,
@@ -113,7 +122,7 @@ class ReviewSession:
         complete = len(self._pages_seen) == self._page_count
         self._review_visible = complete
         self._consent = False
-        self._events.append({"event": "review_page_displayed",
+        self._log({"event": "review_page_displayed",
                              "fingerprint": self._fingerprint,
                              "page": index + 1, "page_count": len(pages),
                              "review_complete": complete})
@@ -140,7 +149,7 @@ class ReviewSession:
             self._changes, trusted_checkout=self._root, trusted_sha256=self._pinned,
             reviewed_fingerprint=self._fingerprint)
         self._consent = True
-        self._events.append({"event": "test_consent_recorded",
+        self._log({"event": "test_consent_recorded",
                              "fingerprint": self._fingerprint,
                              "scope": "request_isolated_tests_only"})
         return {"fingerprint": verified["fingerprint"],
@@ -168,12 +177,16 @@ class ReviewSession:
         self._pages_seen.clear()
         self._page_count = 0
         self._cached_pages = None
-        self._events.append({"event": "session_stopped",
+        self._log({"event": "session_stopped",
                              "consent_revoked": True})
         return {"state": "stopped", "tests_executed": False}
 
     def audit(self):
-        """Return a defensive copy of metadata; never reveal review tokens/code."""
-        return tuple(dict(item) for item in self._events)
+        """Return bounded metadata only, signaling if old events were omitted."""
+        result = [dict(item) for item in self._events]
+        if self._dropped_events:
+            result.insert(0, {"event": "older_events_omitted",
+                              "count": self._dropped_events})
+        return tuple(result)
 
     reject = stop
