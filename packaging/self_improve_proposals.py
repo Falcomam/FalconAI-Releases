@@ -99,7 +99,10 @@ def review(changes):
         if not isinstance(item, dict) or set(item) != {"before", "after"}:
             raise ProposalError("Each file requires exactly before and after")
         before, after = item["before"], item["after"]
-        # Broken historical source may be the reason for the repair. Only the\n        # replacement must pass static syntax validation. Original bytes are\n        # still bounded and pinned to a trusted checkout by the review bridge.\n        original, replacement = _source(before, path, validate_syntax=False), _source(after, path)
+        # The original may be syntactically broken; the proposed replacement
+        # must parse. Baseline text is still bounded, hashed and pinned.
+        original = _source(before, path, validate_syntax=False)
+        replacement = _source(after, path)
         total += len(original) + len(replacement)
         if total > MAX_TOTAL_BYTES:
             raise ProposalError("Proposal exceeds total size limit")
