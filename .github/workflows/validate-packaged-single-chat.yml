@@ -1,0 +1,118 @@
+name: Validate frozen Falcon Ai Developer Mode package (no release)
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/validate-packaged-single-chat.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  frozen-windows-app:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - name: Checkout Falcon source
+        uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Reconstruct and stage single-chat candidate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m pip install pyinstaller==6.16.0 "Pillow>=11.0"
+          if ($LASTEXITCODE -ne 0) { throw 'Packaging tools installation failed' }
+          foreach ($patch in @('v13.6','v13.6.1','v13.6.2','v13.6.3','v13.6.4','v13.6.5')) {
+            python "patches/$patch/apply.py"
+            if ($LASTEXITCODE -ne 0) { throw "Patch $patch failed" }
+          }
+          python packaging/prepare.py
+          if ($LASTEXITCODE -ne 0) { throw '13.7.0 source reconstruction failed' }
+          python packaging/prepare_icon_release.py
+          if ($LASTEXITCODE -ne 0) { throw '13.7.1 icon preparation failed' }
+          python packaging/prepare_engine_candidate.py
+          if ($LASTEXITCODE -ne 0) { throw 'Engine candidate staging failed' }
+          python packaging/prepare_single_chat_candidate.py
+          if ($LASTEXITCODE -ne 0) { throw 'One-chat candidate staging failed' }
+          python -m pip install -r build/Falcon_Ai_SingleChat_Candidate/requirements.txt
+          if ($LASTEXITCODE -ne 0) { throw 'App dependencies failed' }
+          python -m unittest discover -s packaging/tests -p test_engine_manager.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'Engine tests failed' }
+          python -m unittest discover -s packaging/tests -p 'test_developer*.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'Developer tests failed' }
+          @'
+          from pathlib import Path
+          path = Path('build/falcon_app_1371_runtime/app_entry_engine_candidate.py')
+          source = path.read_text(encoding='utf-8')
+          anchor = '        import ollama_runtime\n'
+          assert source.count(anchor) == 1
+          source = source.replace(anchor, anchor +
+              '        import engine_manager\n'
+              '        import developer_workspace\n'
+              '        import developer_chat\n', 1)
+          path.write_text(source, encoding='utf-8')
+          assert 'import app_updates' in source
+          assert 'app_updates.CURRENT_VERSION != (13, 7, 1)' in source
+          assert 'Falcon_Ai_Icon.png' in source
+          print('PASS: frozen test entry checks new engine and coding modules')
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged entry integration check failed' }
+      - name: Build Windows Falcon Ai EXE with source and icon
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $source = (Resolve-Path 'build/Falcon_Ai_SingleChat_Candidate').Path
+          $runtime = (Resolve-Path 'build/falcon_app_1371_runtime').Path
+          $args = @(
+            '--noconfirm', '--clean', '--windowed', '--onedir',
+            '--name', 'Falcon Ai',
+            '--distpath', 'dist', '--workpath', 'build/pyinstaller',
+            '--specpath', 'build/pyinstaller',
+            '--add-data', ((Resolve-Path 'packaging/app_update_restart.ps1').Path + ';.'),
+            '--add-data', ($source + '\RELEASE_VERSION.txt;.'),
+            '--add-data', ($runtime + '\Falcon_Ai_Icon.png;.'),
+            '--icon', ($runtime + '\Falcon_Ai_Icon.ico'),
+            '--hidden-import=winotify', '--hidden-import=pyautogui',
+            '--hidden-import=PIL.Image', '--collect-all=pyautogui'
+          )
+          Get-ChildItem -LiteralPath $source -Filter '*.py' -File | ForEach-Object {
+            $args += @('--add-data', ($_.FullName + ';.'))
+            if ($_.BaseName -notin @('sandbox_runner')) {
+              $args += ('--hidden-import=' + $_.BaseName)
+            }
+          }
+          $env:PYTHONPATH = $source + [IO.Path]::PathSeparator + $runtime
+          $args += (Join-Path $runtime 'app_entry_engine_candidate.py')
+          python -m PyInstaller @args
+          if ($LASTEXITCODE -ne 0) { throw 'Windows EXE freeze failed' }
+          $exe = (Resolve-Path 'dist/Falcon Ai/Falcon Ai.exe').Path
+          $test = Start-Process -FilePath $exe -ArgumentList '--falcon-self-test' -PassThru -Wait
+          if ($test.ExitCode -ne 0) { throw ('Frozen app failed self-test: ' + $test.ExitCode) }
+          Write-Host 'PASS: native Falcon Ai EXE with coding, Ollama health, icon and installer updater'
+      - name: Build and test per-user Windows installer without publishing
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $compiler = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $compiler)) {
+            choco install innosetup -y --no-progress --limit-output
+            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compiler installation failed' }
+          }
+          $runtime = (Resolve-Path 'build/falcon_app_1371_runtime').Path
+          Copy-Item -LiteralPath (Join-Path $runtime 'Falcon_Ai.iss') -Destination 'Falcon_Ai.iss'
+          & $compiler 'Falcon_Ai.iss'
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate installer build failed' }
+          $setup = (Resolve-Path 'output/Falcon_Ai_Setup.exe').Path
+          $proc = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-' -PassThru -Wait
+          if ($proc.ExitCode -ne 0) { throw 'Candidate installer failed' }
+          $installed = Join-Path $env:LOCALAPPDATA 'Programs\Falcon Ai\Falcon Ai.exe'
+          if (-not (Test-Path -LiteralPath $installed)) { throw 'Installed Windows executable missing' }
+          $smoke = Start-Process -FilePath $installed -ArgumentList '--falcon-self-test' -PassThru -Wait
+          if ($smoke.ExitCode -ne 0) { throw 'Installed frozen app import self-test failed' }
+          $helper = Join-Path $env:LOCALAPPDATA 'Programs\Falcon Ai\_internal\app_update_restart.ps1'
+          if (-not (Test-Path -LiteralPath $helper)) { throw 'Installed updater helper missing' }
+          Write-Host 'PASS: bundled single-chat candidate installer, install and frozen-app self-test'
+          Write-Host 'No GitHub Release created. Live version 13.7.1 is unchanged.'
