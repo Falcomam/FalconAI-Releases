@@ -1,0 +1,85 @@
+name: Project Falcon - Native Windows updater integration test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/windows-update-integration.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  actual-windows-updater:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout reviewed Falcon source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up supported Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Reconstruct current published Falcon
+        shell: pwsh
+        run: |
+          python patches/v13.6/apply.py
+          python patches/v13.6.1/apply.py
+          python patches/v13.6.2/apply.py
+          python patches/v13.6.3/apply.py
+          python patches/v13.6.4/apply.py
+          python patches/v13.6.5/apply.py
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to reconstruct published Falcon' }
+      - name: Exercise actual PowerShell update and GUI relaunch on Windows
+        shell: pwsh
+        env:
+          PYTHONUTF8: "1"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:RUNNER_TEMP 'FalconUpdateIntegration'
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          $live = Join-Path $root 'FalconAI'
+          $stageParent = Join-Path $root '.falcon_verified_windows_test'
+          $stage = Join-Path $stageParent 'new_falcon'
+          New-Item -ItemType Directory -Force -Path $live, $stage | Out-Null
+          '13.6.4' | Set-Content -LiteralPath (Join-Path $live 'RELEASE_VERSION.txt')
+          '13.6.5' | Set-Content -LiteralPath (Join-Path $stage 'RELEASE_VERSION.txt')
+          '@echo off' | Set-Content -LiteralPath (Join-Path $stage 'START_HERE.bat')
+          Copy-Item -LiteralPath 'build/Falcon_AI_V13_6_5/restart_helper.py' -Destination (Join-Path $stage 'restart_helper.py')
+          $startupSentinel = Join-Path $root 'gui_reopened.txt'
+          @'
+          from pathlib import Path
+          import time
+          Path(__file__).resolve().parent.parent.joinpath("gui_reopened.txt").write_text("opened", encoding="utf-8")
+          time.sleep(8)
+          '@ | Set-Content -LiteralPath (Join-Path $stage 'falcon_launcher.py')
+          python -m venv (Join-Path $live '.venv')
+          if (-not (Test-Path (Join-Path $live '.venv\Scripts\pythonw.exe'))) {
+            throw 'Test virtual environment failed'
+          }
+          $updater = (Resolve-Path 'build/Falcon_AI_V13_6_5/APPLY_RELEASE_UPDATE.ps1').Path
+          Write-Output ('UPDATER: ' + $updater)
+          $p = Start-Process -FilePath 'powershell.exe' -ArgumentList @(
+             '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',
+             '-File', ('"' + $updater + '"'),
+             '-WaitPid','999999','-Live',('"' + $live + '"'),'-Stage',('"' + $stage + '"')) -PassThru -Wait
+          Write-Output ('POWERHELL EXIT CODE: ' + $p.ExitCode)
+          $logPath = Join-Path $env:LOCALAPPDATA 'FalconAI\release_update.log'
+          if (Test-Path $logPath) {
+            Write-Output 'UPDATE LOG TAIL'
+            Get-Content $logPath -Tail 25
+          } else { Write-Output 'NO UPDATE LOG FOUND' }
+          $restartLog = Join-Path $env:LOCALAPPDATA 'FalconAI\logs\restart.log'
+          if (Test-Path $restartLog) {
+            Write-Output 'RESTART LOG TAIL'
+            Get-Content $restartLog -Tail 25
+          } else { Write-Output 'NO RESTART LOG FOUND' }
+          if ($p.ExitCode -ne 0) { throw 'Upgrader script failed' }
+          if (-not (Test-Path -LiteralPath (Join-Path $live 'RELEASE_VERSION.txt'))) { throw 'Updated app absent' }
+          if ((Get-Content (Join-Path $live 'RELEASE_VERSION.txt') -Raw).Trim() -ne '13.6.5') { throw 'Update version not installed' }
+          if (-not (Test-Path -LiteralPath ($live + '.previous\RELEASE_VERSION.txt'))) { throw 'Backup missing' }
+          if (-not (Test-Path -LiteralPath $startupSentinel)) { throw 'Relaunch never opened the GUI' }
+          Write-Output 'PASS: PowerShell updated Falcon and reopened its GUI on native Windows'
