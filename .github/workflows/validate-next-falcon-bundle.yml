@@ -1,0 +1,68 @@
+name: Validate next Falcon bundled features (development only)
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packaging/html_quality.py"
+      - "packaging/developer_workspace.py"
+      - "packaging/developer_chat.py"
+      - "packaging/tests/test_developer_workspace.py"
+      - "packaging/prepare_single_chat_candidate.py"
+      - "packaging/prepare_command_palette_candidate.py"
+      - "packaging/command_palette.py"
+      - "packaging/message_copy.py"
+      - ".github/workflows/validate-next-falcon-bundle.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  combined-regression:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run engine, developer coding, HTML quality, Copy reply and Tab tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s packaging/tests -p 'test_developer*.py' -v
+          python -m unittest discover -s packaging/tests -p test_engine_manager.py -v
+          python -m unittest discover -s packaging/tests -p test_message_copy.py -v
+          python -m unittest discover -s packaging/tests -p test_command_palette.py -v
+      - name: Reconstruct and compile complete development bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          for patch in v13.6 v13.6.1 v13.6.2 v13.6.3 v13.6.4 v13.6.5; do
+            python "patches/$patch/apply.py"
+          done
+          python packaging/prepare.py
+          python -m pip install 'Pillow>=11.0'
+          python packaging/prepare_icon_release.py
+          python packaging/prepare_engine_candidate.py
+          python packaging/prepare_single_chat_candidate.py
+          python packaging/prepare_v138_release.py
+          python packaging/prepare_copy_reply_candidate.py
+          python packaging/prepare_command_palette_candidate.py
+          python -m compileall -q build/Falcon_Ai_CommandPalette_Candidate
+          python - <<'PY'
+          from pathlib import Path
+          root=Path('build/Falcon_Ai_CommandPalette_Candidate')
+          assert (root/'RELEASE_VERSION.txt').read_text().strip() == '13.8.0'
+          for name in ('developer_chat.py','developer_workspace.py','html_quality.py',
+                       'message_copy.py','command_palette.py','engine_manager.py'):
+              assert (root/name).is_file(), name
+          ui=(root/'falcon.py').read_text(encoding='utf-8')
+          assert 'message_copy.attach_copy_reply' in ui
+          assert 'self.command_picker = command_palette.EntryController' in ui
+          assert 'self.dev_chat.dispatch(prompt)' in ui
+          assert 'self.dev_chat.stop()' in ui
+          print('PASS: entire next-bundle candidate compiles; prior release untouched')
+          PY
