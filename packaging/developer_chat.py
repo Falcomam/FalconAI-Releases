@@ -120,11 +120,18 @@ class ChatFeatures:
         self.app.append("Falcon", str(message))
 
     def stop(self):
+        was_running = self._running
         self._serial += 1
         if self._event is not None:
             self._event.set()
-        if self._running:
-            self._running = False
+        self._event = None
+        self._running = False
+        if was_running:
+            # This controller set app.busy when launching its worker. Clearing
+            # it here prevents a permanently stuck "working" composer after
+            # STOP; stale callbacks are ignored by the serial check.
+            self.app.busy = False
+            self.app.set_status("Ready • Developer Mode stopped")
         # Stopping a generation does not approve or install any files.
 
     def dispatch(self, message):
@@ -261,6 +268,9 @@ class ChatFeatures:
         self.say(ENGINE_HELP)
 
     def _generate(self, kind, goal):
+        if self.app.busy or self._running:
+            self.say("Falcon is already working. Press STOP first if needed.")
+            return
         try:
             messages = proposal_messages(kind, goal)
         except projects.ProjectError as exc:
