@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/publish-falcon-ai-v1391.yml"
+      - "packaging/finalize_packaged_health_release.py"
   workflow_dispatch:
 permissions:
   contents: write
