@@ -168,6 +168,100 @@ change_once("command_palette.py",
         Command("Open saved project", "/project open "),
         Command("Edit existing saved project", "/project edit "),
 ''')
+
+# Targeted edit candidate: keep the existing full-project edit path untouched.
+# In staged Falcon chat, only the user may initiate the command and all edits
+# still flow through the same revision fingerprint/diff/backup approval gate.
+shutil.copy2(REPO / "packaging" / "project_targeted_edits.py",
+             TARGET / "project_targeted_edits.py")
+change_once("developer_chat.py",
+            "import project_browser as browser\\n",
+            "import project_browser as browser\\nimport project_targeted_edits as targeted\\n")
+change_once("developer_chat.py",
+            '    "/project edit <saved_name> <request>  •  /project diff\\n"\\n',
+            '    "/project edit <saved_name> <request>  •  /project diff\\n"\\n'
+            '    "/project edit-small <saved_name> <request>\\n"\\n')
+change_once("developer_chat.py",
+            '        if rest.lower().startswith("edit "):\\n',
+            '''        if rest.lower().startswith("edit-small "):
+            args = rest.split(None, 2)
+            if len(args) == 3 and len(args[2].strip()) >= 8:
+                return "project_edit_small", (args[1], args[2].strip())
+            return "project_help", ""
+        if rest.lower().startswith("edit "):
+''')
+change_once("developer_chat.py",
+            '''        elif action == "project_edit":
+            self._edit(*payload)
+''',
+            '''        elif action == "project_edit":
+            self._edit(*payload)
+        elif action == "project_edit_small":
+            self._edit_small(*payload)
+''')
+change_once("developer_chat.py",
+            '''    def _edit(self, name, goal):
+''',
+            '''    def _edit_small(self, name, goal):
+        if self.app.busy or self._running:
+            self.say("Falcon is already working. Press STOP first.")
+            return
+        try:
+            base = revisions.load_project(name)
+            context = targeted.select_context(base, goal)
+        except (OSError, projects.ProjectError) as exc:
+            self.say("Cannot prepare focused edit: " + str(exc)[:260])
+            return
+
+        def work(cancel):
+            status = engine_manager.probe(timeout=3)
+            if not status["online"]:
+                raise RuntimeError("Ollama is offline. Type /engine start.")
+            coder = engine_manager.saved_coding_model()
+            chat = engine_manager.saved_chat_model()
+            model = coder if coder in status["models"] else chat
+            if model not in status["models"]:
+                raise RuntimeError("No coding or chat model installed. Type /engine list.")
+            if cancel.is_set():
+                return None
+            import agent
+            output = targeted.generate_targeted_with_one_retry(
+                base, goal, model=model, cancel=cancel,
+                ask=agent.ask_ollama, token_limit=6500)
+            if output is None:
+                return None
+            return output
+
+        def complete(output):
+            if output is None:
+                return
+            plan = output["plan"]
+            self.pending = {
+                "mode": "edit", "plan": plan, "base": base,
+                "review": projects.review_proposal(plan),
+                "revision": output["revision"], "reviewed": False,
+            }
+            self.opened = None
+            self.app.set_status("Ready • Focused source edit")
+            self.say("Focused edit proposal ready (NOT saved or executed).\\n"
+                     "Project: " + name +
+                     "\\nSelected source files: " +
+                     ", ".join(output["selected_paths"]) +
+                     "\\nChanged/added files: " +
+                     ", ".join(output["revision"]["changed"]) +
+                     "\\nUnselected existing source is unchanged." +
+                     "\\nUse /project diff to review changes, then "
+                     "/project approve to save with a backup or /project reject.")
+
+        self._launch("Preparing focused local code edit…", work, complete)
+
+    def _edit(self, name, goal):
+''')
+change_once("command_palette.py",
+            '        Command("Edit existing saved project", "/project edit "),\\n',
+            '        Command("Edit existing saved project", "/project edit "),\\n'
+            '        Command("Focused saved-project edit", "/project edit-small "),\\n')
+
 (TARGET / "BROWSER_CANDIDATE_ONLY.txt").write_text(
     "Read-only saved-project list/open/show through same Falcon chat. "
     "No install, no extra window, no PC execution, no release.\n",
