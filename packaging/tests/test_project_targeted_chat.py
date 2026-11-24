@@ -91,6 +91,28 @@ class TargetedChatTests(unittest.TestCase):
         self.assertIn("+    return 5", self.app.messages[-1][1])
         self.assertEqual((self.workspace/"falcon_target"/"main.py").read_text(),
                          self.plan["files"]["main.py"])
+        # No file is overwritten until a real approve command is dispatched.
+        real_save = revisions.save_revision_approved
+        saved = []
+        def save(base, plan, digest):
+            outcome = real_save(base, plan, digest, workspace=self.workspace)
+            saved.append(outcome)
+            return outcome
+        with patch.object(revisions, "save_revision_approved", side_effect=save):
+            self.chat.dispatch("/project approve")
+        self.assertEqual(len(saved), 1)
+        self.assertIsNone(self.chat.pending)
+        self.assertEqual((self.workspace/"falcon_target"/"helpers.py").read_text(),
+                         "def answer():\n    return 5\n")
+        self.assertEqual((self.workspace/"falcon_target"/"main.py").read_text(),
+                         self.plan["files"]["main.py"])
+        real_rollback = revisions.rollback_revision
+        with patch.object(revisions, "rollback_revision",
+                          side_effect=lambda name, backup_id:
+                          real_rollback(name, backup_id, workspace=self.workspace)):
+            self.chat.dispatch("/project rollback falcon_target " + saved[0]["backup_id"])
+        self.assertEqual((self.workspace/"falcon_target"/"helpers.py").read_text(),
+                         "def answer():\n    return 1\n")
 
     def test_missing_model_prevents_write(self):
         initial = (self.workspace/"falcon_target"/"helpers.py").read_bytes()
