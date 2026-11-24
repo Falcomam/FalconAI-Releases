@@ -1,5 +1,6 @@
 """Test planning produces no executable commands and does no execution."""
 from pathlib import Path
+import hashlib
 import sys
 import tempfile
 import unittest
@@ -17,13 +18,14 @@ class TestPlanTests(unittest.TestCase):
         self.root = Path(self.tmp.name)
         (self.root / "FALCON_DEVELOPMENT_BACKLOG.md").write_bytes(b"# Falcon source")
         (self.root / "engine.py").write_bytes(b"def answer():\n    return 1\n")
+        self.pinned = {"engine.py": hashlib.sha256((self.root / "engine.py").read_bytes()).hexdigest()}
         self.changes = {"engine.py": {"before": "def answer():\n    return 1\n",
                                       "after": "def answer():\n    return 2\n"}}
 
     def test_planning_does_not_execute(self):
         with patch("subprocess.run", side_effect=AssertionError("not allowed")), \
              patch("subprocess.Popen", side_effect=AssertionError("not allowed")):
-            result = plans.plan(self.changes, trusted_checkout=self.root)
+            result = plans.plan(self.changes, trusted_checkout=self.root, trusted_sha256=self.pinned)
         self.assertFalse(result["dynamic_tests_executed"])
         self.assertFalse(result["installer_built"])
         self.assertFalse(result["deployment_approved"])
@@ -36,10 +38,18 @@ class TestPlanTests(unittest.TestCase):
         modified = {"engine.py": {"before": "def answer():\n    return 100\n",
                                    "after": "def answer():\n    return 2\n"}}
         with self.assertRaises(proposals.ProposalError):
-            plans.plan(modified, trusted_checkout=self.root)
+            plans.plan(modified, trusted_checkout=self.root, trusted_sha256=self.pinned)
+
+    def test_wrong_source_pin_fails_closed(self):
+        with self.assertRaisesRegex(proposals.ProposalError, "digest mismatch"):
+            plans.plan(self.changes, trusted_checkout=self.root,
+                       trusted_sha256={"engine.py": "0" * 64})
+        with self.assertRaises(proposals.ProposalError):
+            plans.plan(self.changes, trusted_checkout=self.root,
+                       trusted_sha256={})
 
     def test_plan_line_stats(self):
-        result = plans.plan(self.changes, trusted_checkout=self.root)
+        result = plans.plan(self.changes, trusted_checkout=self.root, trusted_sha256=self.pinned)
         self.assertEqual(result["files"][0]["line_changes"],
                          {"added_lines": 1, "removed_lines": 1})
 
