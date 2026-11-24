@@ -74,7 +74,12 @@ replace_one("falcon.py",
     "        engine_menu.add_command(label='Start local Ollama',\n"
     "                                command=lambda: self.submit_command('/engine start'))\n"
     "        engine_menu.add_command(label='List/select installed models',\n"
-    "                                command=lambda: self.submit_command('/engine list'))")
+    "                                command=lambda: self.submit_command('/engine list'))\n"
+    "        engine_menu.add_separator()\n"
+    "        engine_menu.add_command(label='Gaming Mode ON (free VRAM)',\n"
+    "                                command=lambda: self.submit_command('/engine gaming on'))\n"
+    "        engine_menu.add_command(label='Gaming Mode OFF (resume AI)',\n"
+    "                                command=lambda: self.submit_command('/engine gaming off'))")
 
 (TARGET / "SINGLE_CHAT_DEV_ONLY.txt").write_text(
     "Project Falcon V13.8 candidate: One main chat, no separate Developer Studio UI. "
