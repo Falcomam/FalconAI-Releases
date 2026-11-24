@@ -73,6 +73,41 @@ class GenerationTests(unittest.TestCase):
         self.assertIsNone(self._run(ask))
         self.assertEqual(len(calls), 1)
 
+    def test_selected_output_limit_is_bounded(self):
+        requested = []
+        def ask(messages, **kwargs):
+            requested.append(kwargs["limit"])
+            return self.valid
+        gen.generate_with_one_retry(
+            kind="python", messages=self.messages, model="qwen3:4b",
+            cancel=self.cancel, ask=ask, token_limit=6500)
+        self.assertEqual(requested, [6500])
+        with self.assertRaises(projects.ProjectError):
+            gen.generate_with_one_retry(
+                kind="python", messages=self.messages, model="qwen3:4b",
+                cancel=self.cancel, ask=ask, token_limit=1000000)
+
+    def test_retry_has_single_total_time_budget(self):
+        clock = iter([0.0, 0.5, 40.0])
+        timeouts = []
+        def ask(messages, **kwargs):
+            timeouts.append(kwargs["timeout"])
+            return "invalid" if len(timeouts) == 1 else self.valid
+        with patch.object(gen.time, "monotonic", side_effect=lambda: next(clock)):
+            self.assertEqual(self._run(ask)["name"], "sample")
+        self.assertGreater(timeouts[0], timeouts[1])
+
+    def test_expired_time_budget_prevents_second_call(self):
+        clock = iter([0.0, 0.5, 178.0])
+        calls = []
+        def ask(messages, **kwargs):
+            calls.append(1)
+            return "invalid"
+        with patch.object(gen.time, "monotonic", side_effect=lambda: next(clock)):
+            with self.assertRaisesRegex(projects.ProjectError, "time budget exhausted"):
+                self._run(ask)
+        self.assertEqual(len(calls), 1)
+
     def test_unrelated_model_error_does_not_retry(self):
         calls = []
         def ask(*args, **kwargs):
