@@ -185,3 +185,23 @@
 - Code changes via GitHub must have reviewable commits and tests; failures block publication.
 - Development automations may not have connected tool access on every run; if unavailable, record blockers, do not pretend work happened.
 - Release only a meaningful batch, with notes of tested features and limitations. **User action** is only needed for verified install/testing or an essential approval decision.
+
+
+## Gaming-friendly local AI and LostFalcon Benchmark #001 — 2026-11-24
+
+**User target:** Falcon should coexist with games on an RTX 4060-class 8 GB VRAM PC with 24 GB system RAM. The aim is to protect game resources, not to promise concurrent heavy local model inference at zero FPS cost. User wants evidence-based coding quality gains; the first public-facing website from V13.9.1 is our reference failure case.
+
+### Development changes (NOT installed in public V13.9.1)
+- Explicit reversible `/engine gaming on|off|status`: persists independently of chat/coding model choices. ON pauses new chat/project generation via the staged main GUI, gates agent.ask_ollama, and attempts to unload only Falcon's currently loaded selected chat/coding/vision model names via loopback Ollama `/api/ps` + `/api/generate` `keep_alive:0`. OFF permits future work, with model reloading on demand. No GPU/driver/Windows game settings modified, no shutdown of Ollama service, no model downloads or generated source execution. Unload may affect another Ollama client sharing the same selected model; the UI now warns.
+- Gaming ON/OFF actions added to Falcon's command palette and AI Engine menu; busy generation requires STOP or completion before enabling. A saved ON state survives an app restart and boot status reports paused rather than fake Ready.
+- Website prompt now requires coherent hero, modern layout, responsive viewport/CSS, meaningful sections, honest CTA links, and no fabricated URLs. It still requests compact valid JSON suitable for a small local model.
+- New static website advisory `site_design_check.py` surfaces missing mobile viewport, modern flex/grid layout, responsive CSS adaptation, main landmark, content depth and outbound destination links. It **does not run a browser or score visual beauty**; warnings never silently reject/modify source, and never approve it.
+- Deterministic regression `test_site_design_check.py` reconstructs the original two-file LostFalcon website's simple HTML for Benchmark #001. Tests assert multiple design-depth warnings and fewer warnings on a fuller responsive example. User screenshot is **not committed** to the public repo.
+- Security/behavior tests `test_gaming_mode.py` mock Ollama, verify scoped unloading, no accidental model loads, explicit on/off persistence, bounded local endpoints, and honest failure status. Developer chat tests cover busy rejection and mode pause. Source suites run on Windows and Linux.
+- Official reference: https://github.com/ollama/ollama/blob/main/docs/faq.mdx (model keep_alive/unload, memory/context/parallel requests); actual gaming GPU impact is hardware-dependent and remains **unmeasured**.
+
+### Remaining release and quality gates
+1. Verify exact-head Windows + Linux source CI, staged Falcon one-chat integration, and frozen EXE/installer/clean upgrade tests. CI is development-only and may be cancelled/replaced by subsequent pushes. Do not call this a shipped update.
+2. Run controlled on-device benchmark with the same LostFalcon prompt on qwen3:4b vs qwen2.5-coder:7b (and optional 14B when not gaming), record real elapsed time, memory, number of retries, static findings and browser screenshots. No measured FPS or model quality improvement exists yet.
+3. Add isolated browser-render screenshot review and explicit user-approved website test worker with STOP/resource limits; current HTML hints are not proof of a good design.
+4. Decide release version (candidate V13.10.0) only after installer, upgrade/relaunch, preserved user data, and trusted SHA256 release asset checks pass. Keep current installed V13.9.1 working until then.
