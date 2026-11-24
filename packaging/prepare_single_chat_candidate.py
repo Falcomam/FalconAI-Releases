@@ -15,7 +15,7 @@ if (SOURCE / "RELEASE_VERSION.txt").read_text(encoding="utf-8").strip() != "13.7
 if TARGET.exists():
     shutil.rmtree(TARGET)
 shutil.copytree(SOURCE, TARGET, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".venv"))
-for file in ("developer_chat.py", "developer_workspace.py"):
+for file in ("developer_chat.py", "developer_workspace.py", "html_quality.py"):
     shutil.copy2(REPO / "packaging" / file, TARGET / file)
 
 
