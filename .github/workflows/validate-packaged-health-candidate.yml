@@ -1,0 +1,142 @@
+name: Validate frozen Falcon self-check fix (dev only, no release)
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packaging/packaged_diagnostics.py"
+      - "packaging/prepare_packaged_health_candidate.py"
+      - "packaging/tests/test_packaged_diagnostics.py"
+      - ".github/workflows/validate-packaged-health-candidate.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: falcon-frozen-health-dev-validation
+  cancel-in-progress: true
+jobs:
+  windows-frozen-health:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Rebuild verified v13.9 base and stage fixed health and quiet updates
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python -m pip install pyinstaller==6.16.0 "Pillow>=11.0"
+          if ($LASTEXITCODE -ne 0) { throw 'Python packaging dependency install failed' }
+          foreach ($patch in @('v13.6','v13.6.1','v13.6.2','v13.6.3','v13.6.4','v13.6.5')) {
+            python "patches/$patch/apply.py"
+            if ($LASTEXITCODE -ne 0) { throw "Base patch failed: $patch" }
+          }
+          foreach ($script in @(
+            'packaging/prepare.py',
+            'packaging/prepare_icon_release.py',
+            'packaging/prepare_engine_candidate.py',
+            'packaging/prepare_single_chat_candidate.py',
+            'packaging/prepare_v138_release.py',
+            'packaging/prepare_copy_reply_candidate.py',
+            'packaging/prepare_command_palette_candidate.py',
+            'packaging/prepare_web_quality_candidate.py',
+            'packaging/prepare_project_revision_candidate.py',
+            'packaging/prepare_project_browser_candidate.py',
+            'packaging/prepare_next_bundle_windows.py',
+            'packaging/prepare_project_search_candidate.py',
+            'packaging/prepare_quiet_powershell_candidate.py',
+            'packaging/prepare_packaged_health_candidate.py')) {
+            python $script
+            if ($LASTEXITCODE -ne 0) { throw "Source stage failed: $script" }
+          }
+          python -m compileall -q build/Falcon_Ai_Health_Candidate
+          if ($LASTEXITCODE -ne 0) { throw 'Health candidate Python syntax failure' }
+          python -m py_compile build/falcon_app_health_runtime/app_entry.py
+          if ($LASTEXITCODE -ne 0) { throw 'Health candidate entry syntax failure' }
+          foreach ($test in @(
+            'test_packaged_diagnostics.py',
+            'test_quiet_powershell.py',
+            'test_project_search.py',
+            'test_project_search_chat.py',
+            'test_developer_workspace.py',
+            'test_project_revision.py',
+            'test_project_revision_chat.py',
+            'test_project_browser.py',
+            'test_project_browser_chat.py')) {
+            python -m unittest discover -s packaging/tests -p $test -v
+            if ($LASTEXITCODE -ne 0) { throw "Regression failed: $test" }
+          }
+          @'
+          from pathlib import Path
+          target=Path("build/Falcon_Ai_Health_Candidate")
+          runtime=Path("build/falcon_app_health_runtime")
+          diagnostics=(target/"packaged_diagnostics.py").read_text(encoding="utf-8")
+          improve=(target/"improve_cycle.py").read_text(encoding="utf-8")
+          upgrade=(target/"core_upgrade.py").read_text(encoding="utf-8")
+          entry=(runtime/"app_entry.py").read_text(encoding="utf-8")
+          assert (target/"RELEASE_VERSION.txt").read_text().strip()=="13.9.0"
+          assert "sys.modules['diagnostics'] = packaged_diagnostics" in entry
+          assert "--falcon-diagnostics-self-test" in entry
+          assert "legacy source-file Docker Improve" in improve
+          assert "source-file self-upgrade is unavailable" in upgrade.lower()
+          assert "Source-file self-upgrade" in upgrade
+          assert "Falcon Ai.exe" in diagnostics and "app_update_restart.ps1" in diagnostics
+          assert "START_HERE.bat" not in diagnostics
+          assert "No code has changed" in improve
+          assert "quiet_powershell.minimized_startupinfo" in (runtime/"app_updates.py").read_text()
+          print("PASS: runtime health-source policy and legacy source-upgrade guard staged")
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw 'Health integration source assertion failed' }
+          python -m pip install -r build/Falcon_Ai_Health_Candidate/requirements.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Falcon runtime dependencies failed' }
+      - name: Freeze actual Windows EXE and run packaged health self-check
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $source=(Resolve-Path 'build/Falcon_Ai_Health_Candidate').Path
+          $runtime=(Resolve-Path 'build/falcon_app_health_runtime').Path
+          $args=@(
+            '--noconfirm','--clean','--windowed','--onedir',
+            '--name','Falcon Ai',
+            '--distpath','dist','--workpath','build/pyinstaller',
+            '--specpath','build/pyinstaller',
+            '--add-data',((Resolve-Path 'packaging/app_update_restart.ps1').Path + ';.'),
+            '--add-data',($source + '\RELEASE_VERSION.txt;.'),
+            '--add-data',($runtime + '\Falcon_Ai_Icon.png;.'),
+            '--icon',($runtime + '\Falcon_Ai_Icon.ico'),
+            '--hidden-import=winotify','--hidden-import=pyautogui',
+            '--hidden-import=PIL.Image','--collect-all=pyautogui'
+          )
+          Get-ChildItem -LiteralPath $source -Filter '*.py' -File | ForEach-Object {
+            $args += @('--add-data',($_.FullName + ';.'))
+            if ($_.BaseName -ne 'sandbox_runner') {
+              $args += ('--hidden-import=' + $_.BaseName)
+            }
+          }
+          $env:PYTHONPATH=$source + [IO.Path]::PathSeparator + $runtime
+          $args += (Join-Path $runtime 'app_entry.py')
+          python -m PyInstaller @args
+          if ($LASTEXITCODE -ne 0) { throw 'Health Windows EXE build failed' }
+          $exe=(Resolve-Path 'dist/Falcon Ai/Falcon Ai.exe').Path
+          $baseline=Start-Process -FilePath $exe -ArgumentList '--falcon-self-test' -PassThru -Wait
+          if ($baseline.ExitCode -ne 0) { throw 'Existing frozen EXE self-test failed' }
+          $health=Start-Process -FilePath $exe -ArgumentList '--falcon-diagnostics-self-test' -PassThru -Wait
+          if ($health.ExitCode -ne 0) { throw ('Packaged health self-test failed: ' + $health.ExitCode) }
+          $folder=Join-Path $env:LOCALAPPDATA 'FalconAI\v13_5_diagnostics'
+          $report=Get-ChildItem $folder -Filter 'check_*.json' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $report) { throw 'Frozen EXE did not save the local diagnostics report' }
+          $data=Get-Content -LiteralPath $report.FullName -Raw | ConvertFrom-Json
+          if ($data.checks.PSObject.Properties.Count -ne 13) {
+            throw 'Frozen self-check expected exactly 13 checks'
+          }
+          foreach ($check in $data.checks.PSObject.Properties) {
+            if ($check.Value -ne 'present') {
+              throw ('Failed frozen module/installer check: ' + $check.Name + ': ' + $check.Value)
+            }
+          }
+          Write-Host 'PASS: actual frozen Falcon Ai EXE reports 13/13 packaged runtime checks'
+      - name: No release or installer published
+        shell: pwsh
+        run: |
+          Write-Host 'Development smoke checks ONLY. No installer, GitHub Release or PC action published.'
