@@ -40,6 +40,17 @@ class TestPlanTests(unittest.TestCase):
         with self.assertRaises(proposals.ProposalError):
             plans.plan(modified, trusted_checkout=self.root, trusted_sha256=self.pinned)
 
+    def test_risky_calls_require_extra_manual_review(self):
+        changed = {"engine.py": {
+            "before": self.changes["engine.py"]["before"],
+            "after": "import subprocess\nsubprocess.Popen(['echo'])\n",
+        }}
+        result = plans.plan(changed, trusted_checkout=self.root,
+                            trusted_sha256=self.pinned)
+        self.assertTrue(result["advisory_manual_risk_review_required"])
+        self.assertTrue(result["files"][0]["manual_risk_review_required"])
+        self.assertFalse(result["dynamic_tests_executed"])
+
     def test_wrong_source_pin_fails_closed(self):
         with self.assertRaisesRegex(proposals.ProposalError, "digest mismatch"):
             plans.plan(self.changes, trusted_checkout=self.root,
