@@ -50,9 +50,11 @@ change("APPLY_RELEASE_UPDATE.ps1",
           throw ('Updated Falcon failed both launch methods (exit code ' + $child.ExitCode + ')')
         }
       }""")
+# V13.6.1 unintentionally compiled \\v into a vertical-tab character.
+# Fix the actual log path before checking GUI readiness.
 change("APPLY_RELEASE_UPDATE.ps1",
-       "    $bootLog = Join-Path $home 'logs\\v13_5_startup.log'",
-       "    $bootLog = Join-Path $home 'logs\\v13_5_startup.log'\n    Log ('Startup status log: ' + $bootLog)")
+       "    $bootLog = Join-Path $home 'logs" + chr(11) + "13_5_startup.log'",
+       "    $bootLog = Join-Path $home 'logs\\\\v13_5_startup.log'\\n    Log ('Startup status log: ' + $bootLog)")
 change("APPLY_RELEASE_UPDATE.ps1",
        """      Log ('Falcon process running (PID ' + $child.Id + '), GUI startup still unconfirmed')""",
        """      Log ('WARNING: Falcon process running (PID ' + $child.Id + '), GUI readiness unconfirmed; see startup log')""")
@@ -79,4 +81,15 @@ for rel in ("tests/test_v135_permanent.py", "tests/test_v131_updates.py", "tests
     "If pythonw.exe exits immediately, retry via hidden python.exe and check startup status.\\n"
     "Existing backup/rollback safeguards remain. Real Windows desktop verification is still required.\\n",
     encoding="utf-8")
+(target / "FOLDER_GUIDE.txt").write_text(
+    "FALCON AI - FILE ORGANIZATION\\n"
+    "START_HERE.bat - launch Falcon manually\\n"
+    "falcon_launcher.py - GUI startup wrapper\\n"
+    "falcon.py - main app\\n"
+    "APPLY_RELEASE_UPDATE.ps1 - approved update installer\\n"
+    "release_updates.py - GitHub release validation\\n"
+    "tests/ - automated quality checks\\n"
+    "Use LOCALAPPDATA/FalconAI for logs and user settings.\\n"
+    "The .previous sibling folder is a single recovery backup.\\n"
+    "Do not manually move or rename these components.\\n", encoding="utf-8")
 print("Built V13.6.2 on the V13.6.1 source; no user data included")
