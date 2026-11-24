@@ -113,6 +113,14 @@ class DeveloperWorkspaceTests(unittest.TestCase):
             with self.subTest(kind=kind), self.assertRaises(dev.ProjectError):
                 dev.review_proposal(proposal(kind=kind))
 
+    def test_fenced_json_never_bypasses_project_path_safety(self):
+        dangerous = proposal({"../../outside.py": "pass\n"})
+        fenced = "```json\n" + json.dumps(dangerous) + "\n```"
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(dev.ProjectError):
+                dev.parse_proposal(fenced)
+            self.assertEqual(list(Path(directory).iterdir()), [])
+
     def test_json_parse_errors_identify_location_without_execution(self):
         with self.assertRaisesRegex(dev.ProjectError, "line 1, column"):
             dev.parse_proposal('{"name": invalid}')
