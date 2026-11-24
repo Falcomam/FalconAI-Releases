@@ -359,21 +359,34 @@ class ChatFeatures:
         self._launch("Generating local project draft…", work, complete)
 
     def _check(self):
-        if not self.pending:
-            self.say("No proposed project to check. Create a draft with /project first.")
-            return
         if self.app.busy or self._running:
             self.say("Finish or STOP the current operation before checking a project.")
             return
         try:
+            if self.pending:
+                plan = self.pending["plan"]
+                fingerprint = self.pending["review"]["fingerprint"]
+            elif getattr(self, "opened", None):
+                # Saved project reads are allowed only inside the Falcon-owned
+                # workspace with the same stale-snapshot protections as SHOW.
+                import project_browser as saved_browser
+                snapshot = saved_browser.open_saved_project(self.opened["name"])
+                fingerprint = self.opened["fingerprint"]
+                if snapshot["fingerprint"] != fingerprint:
+                    raise projects.ProjectError(
+                        "Saved project changed since opening. Use /project open again.")
+                plan = snapshot["plan"]
+            else:
+                self.say("No proposed or saved project open. Use /project open <name> "
+                         "or create a draft first.")
+                return
             report = project_static_check.inspect(
-                self.pending["plan"],
-                expected_fingerprint=self.pending["review"]["fingerprint"])
+                plan, expected_fingerprint=fingerprint)
         except (projects.ProjectError, OSError) as exc:
             self.say("Static project check blocked: " + str(exc)[:240])
             return
         self.say(project_static_check.render(report) +
-                 "\nThis check does not replace /project review or authorize saving.")
+                 "\nStatic checks do not authorize saving or executing code.")
 
     def _review(self):
         if not self.pending:
