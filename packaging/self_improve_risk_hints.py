@@ -59,6 +59,11 @@ def inspect_python(source, *, filename="<proposal>"):
                 label = "high_impact_call:" + name
             if name and name.endswith((".write_text", ".write_bytes", ".unlink")):
                 label = "possible_file_write_or_delete:" + name
+            elif (isinstance(node.func, ast.Attribute)
+                  and node.func.attr in {"write_text", "write_bytes", "unlink"}):
+                # Also handles Path(...).write_text(), where the receiver is
+                # a call and not a simple dotted expression.
+                label = "possible_file_write_or_delete:." + node.func.attr
             if name == "open":
                 # Opening a file isn't inherently a write, but flag explicit
                 # modes such as w/a/x/+ for manual review.
