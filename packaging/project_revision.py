@@ -255,7 +255,7 @@ def save_revision_approved(base, new_plan, approved_fingerprint, *, workspace=pr
         metadata = {
             "name": name, "base_fingerprint": reviewed["base_fingerprint"],
             "new_fingerprint": reviewed["new_fingerprint"], "changed": list(changes),
-            "added": list(reviewed["added"]),
+            "added": list(reviewed["added"]), "created_dirs": [],
         }
         with (backup / "revision.json").open("x", encoding="utf-8") as f:
             json.dump(metadata, f, ensure_ascii=False, indent=2)
@@ -306,6 +306,13 @@ def save_revision_approved(base, new_plan, approved_fingerprint, *, workspace=pr
                     pass
             _remove_empty_folders(created_folders)
             raise
+        # Persist only directories that this save actually created. Rollback
+        # must not delete pre-existing empty directories.
+        metadata["created_dirs"] = [p.relative_to(project).as_posix()
+                                    for p in created_folders]
+        metadata_path = backup / "revision.json"
+        with metadata_path.open("w", encoding="utf-8") as f:
+            json.dump(metadata, f, ensure_ascii=False, indent=2)
         return {"project": str(project), "backup_id": backup_id,
                 "changed": changes, "added": reviewed["added"], "executed": False}
     except BaseException:
@@ -335,7 +342,8 @@ def rollback_revision(name, backup_id, *, workspace=projects.WORKSPACE):
     except (OSError, ValueError) as exc:
         raise projects.ProjectError("Backup metadata unreadable") from exc
     if (record.get("name") != name or not isinstance(record.get("changed"), list)
-            or not isinstance(record.get("added", []), list)):
+            or not isinstance(record.get("added", []), list)
+            or not isinstance(record.get("created_dirs", []), list)):
         raise projects.ProjectError("Backup does not match project")
     current = _verify_current(name, record.get("new_fingerprint"), workspace)
     project = _guard_project(name, workspace)
@@ -345,6 +353,17 @@ def rollback_revision(name, backup_id, *, workspace=projects.WORKSPACE):
             or len(added) != len(record.get("added", []))
             or not added.issubset(record["changed"])):
         raise projects.ProjectError("Backup has duplicate or missing changed files")
+    # This backup can only clean up directories created by the original save.
+    possible_dirs = set()
+    for filename in added:
+        bits = projects._check_path(filename)
+        for count in range(1, len(bits)):
+            possible_dirs.add("/".join(bits[:count]))
+    created_dirs = record.get("created_dirs", [])
+    if (len(created_dirs) != len(set(created_dirs))
+            or any(not isinstance(d, str) or d not in possible_dirs
+                   for d in created_dirs)):
+        raise projects.ProjectError("Backup has invalid created-directory metadata")
     original_plan = {
         "name": current["plan"]["name"], "kind": current["plan"]["kind"],
         "files": dict(current["plan"]["files"]),
@@ -382,16 +401,16 @@ def rollback_revision(name, backup_id, *, workspace=projects.WORKSPACE):
         finally:
             if temp.exists():
                 temp.unlink()
-    empty_folders = []
     for path in added:
         target = project.joinpath(*projects._check_path(path))
         _validate_target_parent(project, target)
         if target.is_file() and not projects._reparse(target):
+            if target.read_bytes() != current["plan"]["files"][path].encode("utf-8"):
+                raise projects.ProjectError("New file changed during rollback; refusing deletion")
             target.unlink()
-            if target.parent != project:
-                empty_folders.append(target.parent)
-    # Remove directories only if empty; never remove later user files.
-    _remove_empty_folders(empty_folders, stop=project)
+    # Only remove directories created by the original save, if still empty.
+    _remove_empty_folders(
+        [project.joinpath(*d.split("/")) for d in created_dirs], stop=project)
     _verify_current(name, record.get("base_fingerprint"), workspace)
     return {"project": str(project), "restored": tuple(payloads),
             "removed_added": tuple(sorted(added)), "executed": False}
