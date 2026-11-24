@@ -297,5 +297,47 @@ class DeveloperChatTests(unittest.TestCase):
         self.assertFalse(self.chat._running)
 
 
+    def test_gaming_mode_blocks_new_projects_before_model_request(self):
+        with patch.object(dev.gaming_mode, "enabled", return_value=True), \
+             patch.object(self.chat, "_generate",
+                          side_effect=AssertionError("must not generate")):
+            self.assertTrue(self.chat.dispatch(
+                "/project website create a modern LostFalcon gaming website"))
+        self.assertIn("Gaming Mode is ON", self.app.messages[-1][1])
+
+    def test_gaming_command_unloads_selected_models_after_pausing(self):
+        records = []
+        result = {"requested": ("qwen3:4b",), "failed": (),
+                  "remaining": (), "verified": True}
+        def instant(label, function, complete):
+            complete(function(threading.Event()))
+        with patch.object(self.chat, "_launch", side_effect=instant), \
+             patch.object(dev.gaming_mode, "set_enabled", side_effect=records.append), \
+             patch.object(dev.gaming_mode, "unload_falcon_models",
+                          return_value=result) as unload, \
+             patch.object(dev.engine_manager, "saved_chat_model",
+                          return_value="qwen3:4b"), \
+             patch.object(dev.engine_manager, "saved_coding_model",
+                          return_value="qwen2.5-coder:7b"):
+            self.assertTrue(self.chat.dispatch("/engine gaming on"))
+        self.assertEqual(records, [True])
+        unload.assert_called_once_with(
+            ("qwen3:4b", "qwen2.5-coder:7b", "qwen2.5vl:3b"))
+        self.assertIn("Gaming Mode ON", self.app.messages[-1][1])
+        self.assertIn("confirmed", self.app.messages[-1][1])
+
+    def test_gaming_command_rejects_busy_and_off_is_reversible(self):
+        self.app.busy = True
+        with patch.object(dev.gaming_mode, "set_enabled",
+                          side_effect=AssertionError("must not change settings")):
+            self.assertTrue(self.chat.dispatch("/engine gaming on"))
+        self.assertIn("Press STOP", self.app.messages[-1][1])
+        self.app.busy = False
+        with patch.object(dev.gaming_mode, "set_enabled", return_value=False) as save:
+            self.assertTrue(self.chat.dispatch("/engine gaming off"))
+        save.assert_called_once_with(False)
+        self.assertIn("Gaming Mode OFF", self.app.messages[-1][1])
+
+
 if __name__ == "__main__":
     unittest.main()
