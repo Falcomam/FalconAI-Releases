@@ -1,0 +1,149 @@
+"""Single chat developer mode: routing, approvals and model-switch tests."""
+import json
+import os
+from pathlib import Path
+import sys
+import tempfile
+import threading
+import types
+import unittest
+from unittest.mock import patch
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import developer_chat as dev
+import developer_workspace as workspace
+
+
+class FakeRoot:
+    def after(self, delay, callback):
+        callback()
+
+
+class FakeApp:
+    def __init__(self):
+        self.root = FakeRoot()
+        self.messages = []
+        self.busy = False
+        self.status = ""
+    def append(self, name, text):
+        self.messages.append((name, text))
+    def set_status(self, text):
+        self.status = text
+
+
+def project():
+    return {"name": "falcon_test", "kind": "python",
+            "files": {"main.py": "print('hello')\n", "README.md": "Test sample\n"}}
+
+
+class DeveloperChatTests(unittest.TestCase):
+    def setUp(self):
+        self.app = FakeApp()
+        self.chat = dev.ChatFeatures(self.app)
+
+    def test_one_window_commands(self):
+        self.assertEqual(dev.route("/engine list"), ("engine", "list"))
+        self.assertEqual(dev.route("/project review"), ("project_review", ""))
+        self.assertEqual(dev.route("/project approve"), ("project_approve", ""))
+        self.assertEqual(dev.route("/project reject"), ("project_reject", ""))
+        self.assertEqual(dev.route("/project show src/main.py"), ("project_show", "src/main.py"))
+        self.assertEqual(dev.route("/project website build a homepage"),
+                         ("project_new", ("website", "build a homepage")))
+        self.assertEqual(dev.route("Make me a website for my channel"),
+                         ("project_new", ("website", "Make me a website for my channel")))
+        self.assertEqual(dev.route("Create a Minecraft Fabric mod that adds falcons"),
+                         ("project_new", ("fabric_mod", "Create a Minecraft Fabric mod that adds falcons")))
+        self.assertIsNone(dev.route("How do I make a website?"))
+        self.assertIsNone(dev.route("Tell me a joke"))
+        self.assertNotIn("tkinter", Path(dev.__file__).read_text(encoding="utf-8"))
+        self.assertNotIn("Toplevel", Path(dev.__file__).read_text(encoding="utf-8"))
+
+    def test_unmatched_leaves_original_chat_in_charge(self):
+        self.assertFalse(self.chat.dispatch("what is the weather"))
+        self.assertTrue(self.chat.dispatch("/project"))
+        self.assertIn("Developer Mode", self.app.messages[-1][1])
+
+    def test_generation_rejects_empty_request(self):
+        self.assertTrue(self.chat.dispatch("/project python hi"))
+        self.assertIn("Describe the project", self.app.messages[-1][1])
+        self.assertIsNone(self.chat.pending)
+
+    def test_preview_and_exact_approval_in_same_chat(self):
+        p = project()
+        review = workspace.review_proposal(p)
+        self.chat.pending = {"plan": p, "review": review}
+        self.assertTrue(self.chat.dispatch("/project review"))
+        self.assertIn("main.py", self.app.messages[-1][1])
+        self.assertIn("print('hello')", self.app.messages[-1][1])
+        self.assertTrue(self.chat.dispatch("/project show main.py"))
+        self.assertIn("print('hello')", self.app.messages[-1][1])
+        with tempfile.TemporaryDirectory() as directory:
+            real_save = workspace.save_approved
+            def save(plan, digest):
+                return real_save(plan, digest, workspace=Path(directory) / "projects")
+            with patch.object(workspace, "save_approved", save):
+                self.assertTrue(self.chat.dispatch("/project approve"))
+                self.assertTrue((Path(directory) / "projects" / "falcon_test" / "main.py").exists())
+        self.assertIsNone(self.chat.pending)
+        self.assertIn("Nothing was executed", self.app.messages[-1][1])
+
+    def test_stale_fingerprint_refused(self):
+        p = project()
+        review = workspace.review_proposal(p)
+        self.chat.pending = {"plan": p, "review": review}
+        p["files"]["main.py"] = "print('changed')\n"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "projects"
+            real_save = workspace.save_approved
+            with patch.object(workspace, "save_approved",
+                              side_effect=lambda plan, digest: real_save(plan, digest, workspace=root)):
+                self.chat.dispatch("/project approve")
+            self.assertFalse(root.exists())
+        self.assertIn("Saving blocked", self.app.messages[-1][1])
+
+    def test_reject_does_not_write(self):
+        self.chat.pending = {"plan": project(), "review": workspace.review_proposal(project())}
+        self.assertTrue(self.chat.dispatch("/project reject"))
+        self.assertIsNone(self.chat.pending)
+        self.assertIn("No files were written", self.app.messages[-1][1])
+
+    def test_generation_is_inert_until_explicit_approval(self):
+        p = project()
+        fake_agent = types.SimpleNamespace(ask_ollama=lambda *args, **kwargs: json.dumps(p))
+        installed = {"online": True, "models": ("qwen3:4b",), "detail": "OK"}
+        def instant(label, function, complete):
+            complete(function(threading.Event()))
+        with patch.object(self.chat, "_launch", side_effect=instant), \
+             patch.object(dev.engine_manager, "probe", return_value=installed), \
+             patch.object(dev.engine_manager, "saved_chat_model", return_value="qwen3:4b"), \
+             patch.dict(sys.modules, {"agent": fake_agent}):
+            self.chat.dispatch("/project python create a basic hello world demo")
+        self.assertIsNotNone(self.chat.pending)
+        self.assertIn("NOT saved", self.app.messages[-1][1])
+
+    def test_model_selection_uses_installed_local_model(self):
+        fake_falcon = types.SimpleNamespace(MODEL="qwen3:4b")
+        installed = {"online": True, "models": ("qwen3:4b", "llama3.2:3b")}
+        def instant(label, function, complete):
+            complete(function(threading.Event()))
+        with patch.object(self.chat, "_launch", side_effect=instant), \
+             patch.object(dev.engine_manager, "probe", return_value=installed), \
+             patch.object(dev.engine_manager, "save_chat_model", return_value="llama3.2:3b") as save, \
+             patch.dict(sys.modules, {"falcon": fake_falcon}), \
+             patch.dict(os.environ, {}, clear=False):
+            self.chat.dispatch("/engine use llama3.2:3b")
+            self.assertEqual(fake_falcon.MODEL, "llama3.2:3b")
+            save.assert_called_once_with("llama3.2:3b", installed_models=installed["models"])
+        self.assertIn("PC approval and STOP permissions", self.app.messages[-1][1])
+
+    def test_stop_cancels_active_work(self):
+        token = threading.Event()
+        self.chat._event = token
+        self.chat._running = True
+        self.chat.stop()
+        self.assertTrue(token.is_set())
+        self.assertFalse(self.chat._running)
+
+
+if __name__ == "__main__":
+    unittest.main()
