@@ -48,14 +48,14 @@ class SelfImproveProposalTests(unittest.TestCase):
             sip.review({"x.json": {"before": "{}", "after": "{broken"}})
 
     def test_toml_and_line_count_validation(self):
-        before = 'enabled = true\\n'
-        after = 'enabled = false\\nextra = 2\\n'
+        before = 'enabled = true\n'
+        after = 'enabled = false\nextra = 2\n'
         result = sip.review({"settings.toml": {"before": before, "after": after}})
         stats = result["files"][0]["line_changes"]
         self.assertEqual(stats["added_lines"], 2)
         self.assertEqual(stats["removed_lines"], 1)
         with self.assertRaisesRegex(sip.ProposalError, "Invalid TOML"):
-            sip.review({"settings.toml": {"before": before, "after": "x = [\\n"}})
+            sip.review({"settings.toml": {"before": before, "after": "x = [\n"}})
 
     def test_collisions_and_size_caps(self):
         with self.assertRaises(sip.ProposalError):
