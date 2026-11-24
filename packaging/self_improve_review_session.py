@@ -66,10 +66,12 @@ class ReviewSession:
         bridge.verify_pinned_from_checkout(
             self._changes, trusted_checkout=self._root, trusted_sha256=self._pinned,
             reviewed_fingerprint=self._fingerprint)
-        self._review_visible = True
+        complete = "[Preview truncated:" not in output
+        self._review_visible = complete
         self._consent = False
         return {"text": output, "fingerprint": self._fingerprint,
-                "review_token": self._nonce, "state": self.state}
+                "review_token": self._nonce if complete else None,
+                "review_complete": complete, "state": self.state}
 
     def record_user_test_consent(self, *, review_token, fingerprint):
         """UI-side consent gate. Never route model-written text directly here.
