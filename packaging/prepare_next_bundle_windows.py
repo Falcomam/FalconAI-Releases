@@ -88,7 +88,8 @@ if not old_id or old_id != new_id:
     raise RuntimeError("Windows installer AppId changed: upgrade unsafe")
 
 required = {
-    "developer_chat.py", "developer_workspace.py", "engine_manager.py",
+    "developer_chat.py", "developer_generation.py",
+    "developer_workspace.py", "engine_manager.py",
     "message_copy.py", "command_palette.py", "html_quality.py",
     "project_revision.py", "project_browser.py", "falcon.py",
 }
