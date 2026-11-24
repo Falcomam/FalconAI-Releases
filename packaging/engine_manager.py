@@ -74,17 +74,41 @@ def probe(*, timeout=1.8, opener=None):
         return {"online": False, "models": (), "detail": detail or "Ollama is not responding"}
 
 
-def save_chat_model(name, *, installed_models):
-    """Only select a valid, currently reported local model; no remote pulls."""
+def saved_coding_model():
+    """Prefer an explicitly selected coding model, otherwise reuse chat model."""
+    try:
+        payload = json.loads(CONFIG.read_text(encoding="utf-8"))
+        name = payload.get("coding_model") if isinstance(payload, dict) else None
+        if valid_model(name):
+            return name
+    except (OSError, ValueError, TypeError):
+        pass
+    return saved_chat_model()
+
+
+def _save_model_field(field, name, *, installed_models):
+    """Atomically update one installed-model preference without losing the other."""
+    if field not in ("chat_model", "coding_model"):
+        raise EngineError("Unsupported model setting")
     if not valid_model(name):
         raise EngineError("Invalid local AI model name")
     if not isinstance(installed_models, (tuple, list)) or name not in installed_models:
         raise EngineError("Install the model in Ollama before selecting it")
+    try:
+        payload = json.loads(CONFIG.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            payload = {}
+    except (OSError, ValueError, TypeError):
+        payload = {}
+    # Ignore unknown config keys, preserving only independently validated models.
+    values = {key: payload[key] for key in ("chat_model", "coding_model")
+              if valid_model(payload.get(key))}
+    values[field] = name
     DATA.mkdir(parents=True, exist_ok=True)
     temporary = CONFIG.with_suffix(".tmp")
     try:
         with temporary.open("x", encoding="utf-8") as stream:
-            json.dump({"chat_model": name}, stream, indent=2)
+            json.dump(values, stream, indent=2)
         temporary.replace(CONFIG)
     finally:
         try:
@@ -92,6 +116,16 @@ def save_chat_model(name, *, installed_models):
         except OSError:
             pass
     return name
+
+
+def save_chat_model(name, *, installed_models):
+    """Select a currently installed chat model without changing the coding model."""
+    return _save_model_field("chat_model", name, installed_models=installed_models)
+
+
+def save_coding_model(name, *, installed_models):
+    """Select an installed coding model. This does not download a model."""
+    return _save_model_field("coding_model", name, installed_models=installed_models)
 
 
 def start_ollama(*, confirmed=False, which=shutil.which, popen=subprocess.Popen):
