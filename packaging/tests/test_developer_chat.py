@@ -91,6 +91,7 @@ class DeveloperChatTests(unittest.TestCase):
         p = project()
         review = workspace.review_proposal(p)
         self.chat.pending = {"plan": p, "review": review}
+        self.chat.dispatch("/project review")
         p["files"]["main.py"] = "print('changed')\n"
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "projects"
@@ -100,6 +101,16 @@ class DeveloperChatTests(unittest.TestCase):
                 self.chat.dispatch("/project approve")
             self.assertFalse(root.exists())
         self.assertIn("Saving blocked", self.app.messages[-1][1])
+
+    def test_approval_requires_visible_review(self):
+        p = project()
+        self.chat.pending = {"plan": p, "review": workspace.review_proposal(p)}
+        with patch.object(workspace, "save_approved") as save:
+            self.chat.dispatch("/project approve")
+            save.assert_not_called()
+        self.assertIn("Review the proposed files first", self.app.messages[-1][1])
+        self.chat.dispatch("/project review")
+        self.assertTrue(self.chat.pending["reviewed"])
 
     def test_reject_does_not_write(self):
         self.chat.pending = {"plan": project(), "review": workspace.review_proposal(project())}
