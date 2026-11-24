@@ -175,14 +175,14 @@ change_once("command_palette.py",
 shutil.copy2(REPO / "packaging" / "project_targeted_edits.py",
              TARGET / "project_targeted_edits.py")
 change_once("developer_chat.py",
-            "import project_browser as browser\\n",
-            "import project_browser as browser\\nimport project_targeted_edits as targeted\\n")
+            "import project_browser as browser\n",
+            "import project_browser as browser\nimport project_targeted_edits as targeted\n")
 change_once("developer_chat.py",
-            '    "/project edit <saved_name> <request>  •  /project diff\\n"\\n',
-            '    "/project edit <saved_name> <request>  •  /project diff\\n"\\n'
-            '    "/project edit-small <saved_name> <request>\\n"\\n')
+            '    "/project edit <saved_name> <request>  •  /project diff\n"\n',
+            '    "/project edit <saved_name> <request>  •  /project diff\n"\n'
+            '    "/project edit-small <saved_name> <request>\n"\n')
 change_once("developer_chat.py",
-            '        if rest.lower().startswith("edit "):\\n',
+            '        if rest.lower().startswith("edit "):\n',
             '''        if rest.lower().startswith("edit-small "):
             args = rest.split(None, 2)
             if len(args) == 3 and len(args[2].strip()) >= 8:
@@ -258,9 +258,9 @@ change_once("developer_chat.py",
     def _edit(self, name, goal):
 ''')
 change_once("command_palette.py",
-            '        Command("Edit existing saved project", "/project edit "),\\n',
-            '        Command("Edit existing saved project", "/project edit "),\\n'
-            '        Command("Focused saved-project edit", "/project edit-small "),\\n')
+            '        Command("Edit existing saved project", "/project edit "),\n',
+            '        Command("Edit existing saved project", "/project edit "),\n'
+            '        Command("Focused saved-project edit", "/project edit-small "),\n')
 
 (TARGET / "BROWSER_CANDIDATE_ONLY.txt").write_text(
     "Read-only saved-project list/open/show through same Falcon chat. "
