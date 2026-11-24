@@ -1,0 +1,96 @@
+name: Validate Falcon post-13.9 search and minimized PowerShell (dev only)
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packaging/project_search.py"
+      - "packaging/quiet_powershell.py"
+      - "packaging/prepare_project_search_candidate.py"
+      - "packaging/prepare_quiet_powershell_candidate.py"
+      - "packaging/tests/test_project_search.py"
+      - "packaging/tests/test_project_search_chat.py"
+      - "packaging/tests/test_quiet_powershell.py"
+      - ".github/workflows/validate-post139-quiet-powershell-search.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: falcon-post139-quiet-validation
+  cancel-in-progress: true
+jobs:
+  windows-dev-regressions:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Rebuild installed 13.9 source baseline and stage future changes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python -m pip install "Pillow>=11.0"
+          if ($LASTEXITCODE -ne 0) { throw 'Pillow install failed' }
+          foreach ($patch in @('v13.6','v13.6.1','v13.6.2','v13.6.3','v13.6.4','v13.6.5')) {
+            python "patches/$patch/apply.py"
+            if ($LASTEXITCODE -ne 0) { throw "Base patch failed: $patch" }
+          }
+          foreach ($script in @(
+            'packaging/prepare.py',
+            'packaging/prepare_icon_release.py',
+            'packaging/prepare_engine_candidate.py',
+            'packaging/prepare_single_chat_candidate.py',
+            'packaging/prepare_v138_release.py',
+            'packaging/prepare_copy_reply_candidate.py',
+            'packaging/prepare_command_palette_candidate.py',
+            'packaging/prepare_web_quality_candidate.py',
+            'packaging/prepare_project_revision_candidate.py',
+            'packaging/prepare_project_browser_candidate.py',
+            'packaging/prepare_next_bundle_windows.py',
+            'packaging/prepare_project_search_candidate.py',
+            'packaging/prepare_quiet_powershell_candidate.py')) {
+            python $script
+            if ($LASTEXITCODE -ne 0) { throw "Future source stage failed: $script" }
+          }
+          python -m compileall -q build/Falcon_Ai_QuietPowerShell_Candidate
+          if ($LASTEXITCODE -ne 0) { throw 'Future source failed syntax compile' }
+          python -m py_compile build/falcon_app_quiet_powershell_runtime/app_updates.py
+          if ($LASTEXITCODE -ne 0) { throw 'Future updater failed syntax compile' }
+          @'
+          from pathlib import Path
+          source=Path("build/Falcon_Ai_QuietPowerShell_Candidate")
+          runtime=Path("build/falcon_app_quiet_powershell_runtime")
+          app=(runtime/"app_updates.py").read_text(encoding="utf-8")
+          chat=(source/"developer_chat.py").read_text(encoding="utf-8")
+          assert "quiet_powershell.powershell_minimized_args" in app
+          assert "quiet_powershell.minimized_startupinfo" in app
+          assert '"project_search", rest[7:].strip()' in chat
+          assert "self._search_saved(payload)" in chat
+          assert "self.dev_chat.stop()" in (source/"falcon.py").read_text(encoding="utf-8")
+          assert (source/"RELEASE_VERSION.txt").read_text().strip()=="13.9.0"
+          assert (source/"POST_139_MINIMIZED_POWERSHELL_DEV_ONLY.txt").exists()
+          assert (source/"POST_139_PROJECT_SEARCH_DEV_ONLY.txt").exists()
+          assert "powershell" not in (runtime/"Falcon_Ai.iss").read_text(encoding="utf-8").lower()
+          assert (runtime/"Falcon_Ai.iss").read_text(encoding="utf-8").count('Falcon Ai.exe')>=1
+          print("PASS: verified published 13.9 source retained; only internal update helper is minimized")
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw 'Future Falcon source integration changed' }
+      - name: Run Windows source, in-chat search, and minimized helper tests
+        shell: pwsh
+        run: |
+          foreach ($test in @(
+            'test_project_search.py',
+            'test_project_search_chat.py',
+            'test_quiet_powershell.py',
+            'test_project_revision.py',
+            'test_project_revision_chat.py',
+            'test_project_browser.py',
+            'test_project_browser_chat.py',
+            'test_message_copy.py',
+            'test_command_palette.py',
+            'test_developer_workspace.py',
+            'test_html_quality.py')) {
+            python -m unittest discover -s packaging/tests -p $test -v
+            if ($LASTEXITCODE -ne 0) { throw "Windows regression failed $test" }
+          }
