@@ -1,0 +1,151 @@
+name: Build and release Falcon Ai 13.7.0 Windows app
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/publish-falcon-ai-app.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: falcon-ai-13-7-app
+  cancel-in-progress: false
+
+jobs:
+  build-windows-app:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      PYTHONUTF8: "1"
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout Falcon project
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install packaging tools
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller==6.16.0
+      - name: Reconstruct and test established Falcon release
+        shell: pwsh
+        run: |
+          python patches/v13.6/apply.py
+          if ($LASTEXITCODE -ne 0) { throw 'Base reconstruction failed' }
+          python patches/v13.6.1/apply.py
+          if ($LASTEXITCODE -ne 0) { throw '13.6.1 patch failed' }
+          python patches/v13.6.2/apply.py
+          if ($LASTEXITCODE -ne 0) { throw '13.6.2 patch failed' }
+          python patches/v13.6.3/apply.py
+          if ($LASTEXITCODE -ne 0) { throw '13.6.3 patch failed' }
+          python patches/v13.6.4/apply.py
+          if ($LASTEXITCODE -ne 0) { throw '13.6.4 patch failed' }
+          python patches/v13.6.5/apply.py
+          if ($LASTEXITCODE -ne 0) { throw '13.6.5 patch failed' }
+          Push-Location build/Falcon_AI_V13_6_5
+          python -m unittest discover -s tests -q
+          if ($LASTEXITCODE -ne 0) { throw 'Falcon regression tests failed' }
+          Pop-Location
+      - name: Prepare Falcon Ai 13.7.0 and dependencies
+        shell: pwsh
+        run: |
+          python packaging/prepare.py
+          if ($LASTEXITCODE -ne 0) { throw 'Falcon Ai app source failed validation' }
+          python -m pip install -r build/Falcon_Ai_App_V13_7_0/requirements.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Falcon dependencies failed installation' }
+          python -m compileall -q build/Falcon_Ai_App_V13_7_0
+          python -m py_compile packaging/app_updates.py packaging/app_entry.py
+          if ($LASTEXITCODE -ne 0) { throw 'App compile failed' }
+      - name: Package self-contained Falcon Ai.exe
+        shell: pwsh
+        run: |
+          $source = (Resolve-Path 'build/Falcon_Ai_App_V13_7_0').Path
+          $args = @(
+            '--noconfirm', '--clean', '--windowed', '--onedir',
+            '--name', 'Falcon Ai',
+            '--distpath', 'dist', '--workpath', 'build/pyinstaller',
+            '--specpath', 'build/pyinstaller',
+            '--add-data', ((Resolve-Path 'packaging/app_update_restart.ps1').Path + ';.'),
+            '--add-data', ($source + '\RELEASE_VERSION.txt;.'),
+            '--hidden-import=winotify', '--hidden-import=pyautogui',
+            '--hidden-import=PIL.Image', '--collect-all=pyautogui'
+          )
+          Get-ChildItem -LiteralPath $source -Filter '*.py' -File | ForEach-Object {
+            $args += @('--add-data', ($_.FullName + ';.'))
+            if ($_.BaseName -notin @('sandbox_runner')) {
+              $args += ('--hidden-import=' + $_.BaseName)
+            }
+          }
+          $env:PYTHONPATH = $source + [IO.Path]::PathSeparator + (Resolve-Path 'packaging').Path
+          $args += (Resolve-Path 'packaging/app_entry.py').Path
+          python -m PyInstaller @args
+          if ($LASTEXITCODE -ne 0) { throw 'PyInstaller failed' }
+          if (-not (Test-Path 'dist/Falcon Ai/Falcon Ai.exe')) { throw 'Falcon Ai.exe missing' }
+      - name: Self-test application executable
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path 'dist/Falcon Ai/Falcon Ai.exe').Path
+          $p = Start-Process -FilePath $exe -ArgumentList '--falcon-self-test' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw ('Falcon Ai executable self-test failed: ' + $p.ExitCode) }
+          Write-Host 'PASS: frozen Falcon Ai core modules, updater, and monitor imports'
+      - name: Prepare Inno Setup
+        shell: pwsh
+        run: |
+          $compiler = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $compiler)) {
+            choco install innosetup -y --no-progress --limit-output
+            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
+          }
+          if (-not (Test-Path -LiteralPath $compiler)) { throw 'Inno Setup compiler not present' }
+          Copy-Item -LiteralPath 'packaging/Falcon_Ai.iss' -Destination 'Falcon_Ai.iss'
+          & $compiler 'Falcon_Ai.iss'
+          if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }
+          if (-not (Test-Path 'output/Falcon_Ai_Setup.exe')) { throw 'One-click installer missing' }
+      - name: Test clean per-user installation and uninstall
+        shell: pwsh
+        run: |
+          $setup = (Resolve-Path 'output/Falcon_Ai_Setup.exe').Path
+          $appDir = Join-Path $env:LOCALAPPDATA 'Programs\Falcon Ai'
+          $p = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw ('Silent install failed: ' + $p.ExitCode) }
+          $exe = Join-Path $appDir 'Falcon Ai.exe'
+          if (-not (Test-Path $exe)) { throw 'Installed Falcon Ai.exe missing' }
+          $x = Start-Process -FilePath $exe -ArgumentList '--falcon-self-test' -Wait -PassThru
+          if ($x.ExitCode -ne 0) { throw ('Installed Falcon Ai.exe self-test failed: ' + $x.ExitCode) }
+          Write-Host 'PASS: one-click per-user installer and installed app test'
+          $unins = Get-ChildItem $appDir -Filter 'unins*.exe' | Select-Object -First 1
+          if (-not $unins) { throw 'Windows uninstaller missing' }
+          Write-Host ('PASS: standard Windows uninstaller present: ' + $unins.Name)
+      - name: Publish verified Falcon Ai installer
+        shell: pwsh
+        run: |
+          $asset = 'output/Falcon_Ai_Setup.exe'
+          $digest = (Get-FileHash -LiteralPath $asset -Algorithm SHA256).Hash.ToLowerInvariant()
+          $size = (Get-Item -LiteralPath $asset).Length
+          Write-Host ('Falcon Ai setup file size: ' + $size)
+          Write-Host ('SHA256: ' + $digest)
+          @"
+          Falcon Ai 13.7.0 - First real Windows app release.
+
+          - Exact Windows application name: Falcon Ai.
+          - One-click Inno Setup installer, Start menu and desktop shortcut.
+          - Self-contained Python runtime and minimalist purple Command Center.
+          - Existing Falcon local data and Ollama configuration are preserved.
+          - Top-right activity dropdown and optional Mini Monitor retained.
+          - New app updater verifies GitHub SHA256 installer and uses a logged external relaunch helper.
+          - Legacy script-based installations are not deleted; user may migrate safely.
+          - Developer Mode remains in development.
+          - 270 existing Falcon regression tests plus native Windows EXE and installer tests.
+          - This build is unsigned and may display Windows SmartScreen reputation warnings.
+          - Windows user acceptance testing remains necessary.
+          "@ | Set-Content -Encoding utf8 release_notes.txt
+          gh release create v13.7.0 $asset --title 'Falcon Ai V13.7.0 - Windows App' --notes-file release_notes.txt
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub release creation failed' }
