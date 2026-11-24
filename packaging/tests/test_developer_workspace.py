@@ -92,7 +92,7 @@ class DeveloperWorkspaceTests(unittest.TestCase):
 
     def test_website_and_fabric_starters_supported_as_inert_files(self):
         for kind, files in [
-            ("website", {"index.html": "<!doctype html><title>Falcon</title>",
+            ("website", {"index.html": "<!doctype html><html><head><meta charset=\"UTF-8\"><title>Falcon</title></head><body><h1>Hi</h1></body></html>",
                          "styles/main.css": "body {font-family: sans-serif;}"}),
             ("fabric_mod", {"build.gradle": "plugins { id 'fabric-loom' version '1.8' }",
                             "src/main/java/example/Falcon.java":
@@ -102,6 +102,36 @@ class DeveloperWorkspaceTests(unittest.TestCase):
             with self.subTest(kind=kind):
                 result = dev.review_proposal(proposal(files, kind=kind))
                 self.assertEqual(result["kind"], kind)
+
+    def test_website_bad_meta_blocked_before_any_files_written(self):
+        malformed = (
+            '<!DOCTYPE html>\\n<html lang="en"><head>\\n'
+            '<meta charset="UTF-\\n'
+            '<meta name="viewport" content="width=device-width">\\n'
+            '<title>Broken</title></head><body>hi</body></html>'
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "projects"
+            p = proposal({"index.html": malformed}, kind="website")
+            with self.assertRaisesRegex(dev.ProjectError, "Website HTML validation failed"):
+                dev.save_approved(p, "unapproved", workspace=root)
+            self.assertFalse(root.exists())
+
+    def test_website_missing_closing_tag_or_charset_blocked(self):
+        for content in (
+            '<html><head><meta charset="UTF-8"><title>Missing</title></head><body>Hi',
+            '<html><head><title>Missing charset</title></head><body>Hi</body></html>',
+            '<html><head><meta charset="UTF-8"></head><body>Hi</body></html>',
+        ):
+            with self.subTest(content=content), self.assertRaises(dev.ProjectError):
+                dev.review_proposal(proposal({"index.html": content}, kind="website"))
+
+    def test_website_missing_nav_target_is_warning_not_saved_code(self):
+        content = ('<!doctype html><html><head><meta charset="UTF-8"><title>Test</title></head>'
+                   '<body><nav><a href="#about">About</a></nav></body></html>')
+        result = dev.review_proposal(proposal({"index.html": content}, kind="website"))
+        self.assertTrue(any("about" in warning for warning in result["quality_warnings"]))
+        self.assertFalse(result["execution_allowed"])
 
     def test_file_caps_and_bad_model_output(self):
         with self.assertRaises(dev.ProjectError):
