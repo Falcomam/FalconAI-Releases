@@ -62,9 +62,8 @@ one(TARGET/'release_updates.py',
     'CURRENT_VERSION = (13, 7, 0)', 'CURRENT_VERSION = (13, 7, 1)')
 one(TARGET/'falcon_launcher.py', 'Starting Falcon Ai V13.7.0', 'Starting Falcon Ai V13.7.1')
 one(TARGET/'falcon_launcher.py',
-    'root=tk.Tk()\n            Falcon(root)',
-    """root=tk.Tk()
-            # Match the Windows EXE, installer, taskbar and desktop shortcut icon.
+    '            app = Falcon(root)',
+    """# Match the Windows EXE, installer, taskbar and desktop shortcut icon.
             # Load the SHA256-pinned icon bundled with Falcon Ai.
             try:
                 resource = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
@@ -75,7 +74,7 @@ one(TARGET/'falcon_launcher.py',
                     root._falcon_icon_reference = window_icon
             except Exception as icon_error:
                 print('[BOOT] Window icon unavailable: ' + str(icon_error)[:120], file=log)
-            Falcon(root)""")
+            app = Falcon(root)""")
 
 # Package-specific modules are prepared separately to avoid modifying the
 # published V13.7.0 update channel and keep regression reconstruction possible.
