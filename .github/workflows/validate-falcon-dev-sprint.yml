@@ -1,0 +1,60 @@
+name: Validate Falcon developer and self-improvement integration (dev only)
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packaging/developer_workspace.py"
+      - "packaging/self_improve_*.py"
+      - "packaging/tests/test_developer_workspace.py"
+      - "packaging/tests/test_self_improve_*.py"
+      - ".github/workflows/validate-falcon-dev-sprint.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: falcon-dev-sprint-integration-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify-dev-features:
+    name: Source reviews and coding models (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile all edited development source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q packaging
+      - name: Run model project safety and source proposal suites together
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          import sys
+          tests = sorted(Path("packaging/tests").glob("test_self_improve_*.py"))
+          tests.append(Path("packaging/tests/test_developer_workspace.py"))
+          if len(tests) < 8:
+              raise SystemExit("Missing required self-improvement test files")
+          for path in tests:
+              print("Checking", path, flush=True)
+              result = subprocess.run(
+                  [sys.executable, "-m", "unittest", "discover", "-s",
+                   "packaging/tests", "-p", path.name, "-v"], check=False)
+              if result.returncode:
+                  raise SystemExit(result.returncode)
+          print("PASS: combined source review, pinned checkout, developer JSON and project tests")
+          PY
+      - name: Confirm this workflow cannot publish/install
+        shell: bash
+        run: |
+          echo "No model generated source executed, no release created and no Falcon installer changed."
