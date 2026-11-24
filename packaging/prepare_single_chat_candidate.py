@@ -16,7 +16,8 @@ if TARGET.exists():
     shutil.rmtree(TARGET)
 shutil.copytree(SOURCE, TARGET, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".venv"))
 for file in ("developer_chat.py", "developer_generation.py",
-             "developer_workspace.py", "project_static_check.py", "html_quality.py"):
+             "developer_workspace.py", "project_static_check.py", "html_quality.py",
+             "gaming_mode.py"):
     shutil.copy2(REPO / "packaging" / file, TARGET / file)
 
 
@@ -38,6 +39,9 @@ replace_one("falcon.py",
 replace_one("falcon.py",
     "        if self.workflow.dispatch(prompt):\n            return\n        self.chat_message(prompt)",
     "        if self.dev_chat.dispatch(prompt):\n            return\n"
+    "        if developer_chat.gaming_mode.enabled():\n"
+    "            self.append('Falcon', 'Gaming Mode ON: local AI requests are paused. Type /engine gaming off to resume.')\n"
+    "            return\n"
     "        if self.workflow.dispatch(prompt):\n            return\n        self.chat_message(prompt)")
 replace_one("falcon.py",
     "        if hasattr(self, 'workflow'):\n            self.workflow.stop()\n",
