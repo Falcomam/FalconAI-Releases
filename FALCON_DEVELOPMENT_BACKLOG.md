@@ -1,5 +1,30 @@
 # Falcon Ai — Consolidated development backlog (2026-11-24)
 
+## Extended Falcon coding sprint — post-13.9.1 development (2026-11-24)
+
+**Release status:** All work below is in the public development source. The user's working V13.9.1 remains unchanged. Do not release, claim installed functionality, or hand over an installer until a separate versioned frozen EXE/clean install/upgrade/relaunch/data-retention release gate succeeds.
+
+### Self-improvement source review foundation
+- Added `self_improve_review_session.py`: ephemeral draft/review/test-consent states. Exact SHA-256 proposal and unpredictable review token required; rechecks trusted pinned baseline before consent; STOP or rejection permanently invalidates token. Consent is for **requesting future isolated tests only**, never for installation or execution. Truncated previews cannot create approval.
+- Added `self_improve_cli.py`: development-only read-only CLI for a caller-pinned trusted checkout and JSON proposal. Supports source diffs or inert test-plan output. Bounded JSON input, duplicate-key/NaN rejection, no model-provided commands and no code execution.
+- Proposal reviews can now **repair broken original Python, JSON or TOML source**; the original is bounded and pinned, while the proposed replacement must pass syntax checks.
+- Combined Windows and Linux source test suites include the new session, CLI, source repair and review rollback protections.
+
+### Better in-chat Developer Mode, coding models and reliability
+- Added `project_static_check.py` and `/project check`: static diagnostics for pending proposals, with a review fingerprint; when a Falcon-owned saved project is opened, checks its snapshot again and refuses stale source. Reports files, lines, digests, source parsing and warnings. Clearly says **no program tests, dependencies or builds were executed**.
+- Added `developer_generation.py`: one bounded JSON source repair retry for small local Ollama coding models (max 2 attempts). STOP checked before/after requests, no retries of Ollama transport failures, no writes or auto execution. Applied to new projects and staged edit revisions.
+- Added independent coding model selection via `/engine use-code <installed_name>` and `/engine coding`, with saved preference and fallback to the already installed chat model; no model downloads or new permissions. Source-based edit revision uses the same coding selector.
+- Fixed Developer Mode STOP clearing its owned busy state and ignoring late callbacks; launching a replacement draft now preserves the previous reviewed proposal until a valid new draft is ready. Busy reject instructs STOP rather than silently dropping the draft.
+- Updated single-chat/next-bundle Windows staging scripts to include the new helper and checker; revised project browser/revision patch anchors to retain `/project check` and busy-safe reject handling.
+- `validate-falcon-dev-sprint.yml` runs the combined developer, engine, review and security suites across Windows and Linux. Several successful runs occurred during this sprint. The *internal no-publish* Windows installer build must still complete all gates before any release decision.
+
+### Next milestones
+1. Finish/fix frozen-executable installer CI, clean install and in-place upgrade/relaunch/data-retention verification for the new development candidate.
+2. Add full-source review support when a proposed diff exceeds the chat preview limit; never issue approval for clipped source.
+3. Implement a separately authorized isolated test worker only after independent sandbox/security review, resource limits, cancellation, bounded logs and trusted source pinning.
+4. Integrate review-first Falcon source improvement workflow into a new packaged runtime; avoid trying to rewrite frozen EXEs. Verified release assets only through the trusted update process.
+5. Improve coding output quality, performance, specific actionable diagnostics and standalone coding projects before claiming full autonomous coding capability.
+
 ## Extended coding sprint — review pipeline and model-response quality
 
 - Added risk hints for potentially high-impact Python APIs, including subprocess, dynamic execution and writing files. The analyzer uses AST only, flags common import aliases and explicitly labels findings **advisory only**, not proof of safety.
