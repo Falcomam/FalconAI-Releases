@@ -44,6 +44,7 @@ class DeveloperChatTests(unittest.TestCase):
     def test_one_window_commands(self):
         self.assertEqual(dev.route("/engine list"), ("engine", "list"))
         self.assertEqual(dev.route("/project review"), ("project_review", ""))
+        self.assertEqual(dev.route("/project check"), ("project_check", ""))
         self.assertEqual(dev.route("/project approve"), ("project_approve", ""))
         self.assertEqual(dev.route("/project reject"), ("project_reject", ""))
         self.assertEqual(dev.route("/project show src/main.py"), ("project_show", "src/main.py"))
@@ -67,6 +68,25 @@ class DeveloperChatTests(unittest.TestCase):
         self.assertTrue(self.chat.dispatch("/project python hi"))
         self.assertIn("Describe the project", self.app.messages[-1][1])
         self.assertIsNone(self.chat.pending)
+
+    def test_static_check_does_not_grant_review_or_execute(self):
+        p = project()
+        info = workspace.review_proposal(p)
+        self.chat.pending = {"plan": p, "review": info, "reviewed": False}
+        with patch.object(workspace, "save_approved",
+                          side_effect=AssertionError("no writes")):
+            self.assertTrue(self.chat.dispatch("/project check"))
+        self.assertIn("PROJECT STATIC CHECK", self.app.messages[-1][1])
+        self.assertIn("Executed tests: NONE", self.app.messages[-1][1])
+        self.assertFalse(self.chat.pending["reviewed"])
+
+    def test_static_check_rejects_mutated_proposal(self):
+        p = project()
+        info = workspace.review_proposal(p)
+        self.chat.pending = {"plan": p, "review": info, "reviewed": False}
+        p["files"]["main.py"] = "print('tampered')\n"
+        self.chat.dispatch("/project check")
+        self.assertIn("Static project check blocked", self.app.messages[-1][1])
 
     def test_preview_and_exact_approval_in_same_chat(self):
         p = project()
