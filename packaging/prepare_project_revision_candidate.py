@@ -159,9 +159,11 @@ replace_one(
         if not self.pending or self.pending.get("mode") != "edit":
             self.say("No pending edit. Use /project edit <saved_name> <request>.")
             return
-        self.pending["reviewed"] = True
         revision = self.pending["revision"]
         diff = revision["diff"]
+        # Reviewing a clipped source diff must never unlock approval.
+        complete = len(diff) <= 26000
+        self.pending["reviewed"] = complete
         warnings = revision.get("quality_warnings", ())
         self.say("REVIEW REVISION: " + self.pending["plan"]["name"] +
                  "\\nSHA-256 proposal fingerprint: " + revision["new_fingerprint"] +
@@ -171,7 +173,10 @@ replace_one(
                  "\\n\\n" + diff[:26000] +
                  ("\\n[Diff shortened; use /project show <file> for a source preview.]"
                   if len(diff) > 26000 else "") +
-                 "\\n\\nType /project approve or /project reject.")
+                 ("\\n\\nType /project approve or /project reject."
+                  if complete else
+                  "\\n\\nApproval BLOCKED: diff is too large to review completely. "
+                  "Use a smaller focused edit or split the change into reviewed revisions."))
 
     def _rollback(self, name, backup_id):
         if self.app.busy or self._running:
