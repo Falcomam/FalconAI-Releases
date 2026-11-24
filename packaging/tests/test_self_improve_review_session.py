@@ -105,6 +105,17 @@ class ReviewSessionTests(unittest.TestCase):
         self.assertFalse(granted["tests_executed"])
         self.assertEqual(granted["scope"], "request_isolated_tests_only")
 
+    def test_review_pages_cached_without_skipping_baseline_recheck(self):
+        self.session.submit(self.changes)
+        real_render = sessions.previews.render_pages
+        with patch.object(sessions.previews, "render_pages", wraps=real_render) as renderer:
+            self.session.show_review_page(0)
+            self.session.show_review_page(0)
+            renderer.assert_called_once()
+        (self.root / "engine.py").write_bytes(b"def run():\n    return 19\n")
+        with self.assertRaises(proposals.ProposalError):
+            self.session.show_review_page(0)
+
     def test_paged_review_rejects_out_of_range_and_stale_source(self):
         self.session.submit(self.changes)
         with self.assertRaises(proposals.ProposalError):
