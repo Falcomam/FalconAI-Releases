@@ -42,16 +42,26 @@ def select_context(base, goal, *, max_chars=MAX_CONTEXT_CHARS, max_files=MAX_TAR
     if len(explicit_paths) > max_files:
         raise projects.ProjectError(
             "Too many explicitly requested source files for the selected context")
-    goal_words = set(WORD.findall(goal.casefold()))
+    if sum(len(plan["files"][path]) for path in explicit_paths) > max_chars:
+        raise projects.ProjectError(
+            "Explicitly requested files exceed the combined coding context limit")
+    stopwords = {"the", "and", "for", "with", "from", "that", "this", "make",
+                 "edit", "update", "change", "code", "file", "project", "please",
+                 "add", "fix", "into", "should", "want", "can", "return"}
+    goal_words = set(WORD.findall(goal.casefold())) - stopwords
     ranked = []
     for path in names:
         parts = set(WORD.findall(path.casefold()))
-        match = len(parts & goal_words)
+        path_matches = len(parts & goal_words)
         direct = int(path.casefold() in goal.casefold())
         root = path.rsplit("/", 1)[-1].casefold()
-        priority = int(root in {"main.py", "app.py", "index.html", "readme.md"})
-        ranked.append((-(100 * direct + 10 * match + priority),
-                       len(plan["files"][path]), path))
+        # Source contents are already in the trusted bounded snapshot. Use
+        # distinct lexical overlap, not model-controlled filesystem searches.
+        source_words = set(WORD.findall(plan["files"][path][:24000].casefold()))
+        content_matches = len(source_words & goal_words)
+        priority = int(root in {"main.py", "app.py", "index.html"})
+        score = 1000 * direct + 15 * path_matches + 3 * content_matches + priority
+        ranked.append((-score, len(plan["files"][path]), path))
     ranked.sort()
     selected = {}
     used = 0
