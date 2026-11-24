@@ -5,6 +5,8 @@ on:
     paths:
       - ".github/workflows/verify-next-bundle-installer.yml"
       - "packaging/prepare_next_bundle_windows.py"
+      - "packaging/prepare_project_revision_candidate.py"
+      - "packaging/prepare_single_chat_candidate.py"
   workflow_dispatch:
 permissions:
   contents: read
