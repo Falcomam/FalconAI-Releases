@@ -82,6 +82,19 @@ class DeveloperChatTests(unittest.TestCase):
         self.assertIn("Executed tests: NONE", self.app.messages[-1][1])
         self.assertFalse(self.chat.pending["reviewed"])
 
+    def test_static_check_saved_project_and_stale_snapshot(self):
+        p = project()
+        info = workspace.review_proposal(p)
+        self.chat.opened = {"name": p["name"], "fingerprint": info["fingerprint"]}
+        snapshot = {"plan": p, "fingerprint": info["fingerprint"]}
+        fake_browser = types.SimpleNamespace(open_saved_project=lambda name: snapshot)
+        with patch.dict(sys.modules, {"project_browser": fake_browser}):
+            self.chat.dispatch("/project check")
+            self.assertIn("PROJECT STATIC CHECK", self.app.messages[-1][1])
+            snapshot["fingerprint"] = "0" * 64
+            self.chat.dispatch("/project check")
+            self.assertIn("Saved project changed", self.app.messages[-1][1])
+
     def test_static_check_rejects_mutated_proposal(self):
         p = project()
         info = workspace.review_proposal(p)
