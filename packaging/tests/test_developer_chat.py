@@ -43,6 +43,8 @@ class DeveloperChatTests(unittest.TestCase):
 
     def test_one_window_commands(self):
         self.assertEqual(dev.route("/engine list"), ("engine", "list"))
+        self.assertEqual(dev.route("/engine use-code qwen2.5-coder:7b"),
+                         ("engine", "use-code qwen2.5-coder:7b"))
         self.assertEqual(dev.route("/project review"), ("project_review", ""))
         self.assertEqual(dev.route("/project check"), ("project_check", ""))
         self.assertEqual(dev.route("/project approve"), ("project_approve", ""))
@@ -194,6 +196,49 @@ class DeveloperChatTests(unittest.TestCase):
         self.chat._finish(serial_before, lambda plan: setattr(
             self.chat, "pending", plan), {"unsafe": True})
         self.assertIsNone(self.chat.pending)
+
+    def test_coding_model_is_independent_of_chat_model(self):
+        installed = {"online": True, "models": ("qwen3:4b", "qwen2.5-coder:7b")}
+        def instant(label, function, complete):
+            complete(function(threading.Event()))
+        with patch.object(self.chat, "_launch", side_effect=instant), \
+             patch.object(dev.engine_manager, "probe", return_value=installed), \
+             patch.object(dev.engine_manager, "save_coding_model",
+                          return_value="qwen2.5-coder:7b") as save:
+            self.chat.dispatch("/engine use-code qwen2.5-coder:7b")
+            save.assert_called_once_with("qwen2.5-coder:7b",
+                                         installed_models=installed["models"])
+        self.assertIn("Chat model is unchanged", self.app.messages[-1][1])
+
+    def test_project_generation_uses_dedicated_model_or_chat_fallback(self):
+        p = project()
+        selected = []
+        def fake_ask(*args, **kwargs):
+            selected.append(kwargs["model"])
+            return json.dumps(p)
+        fake_agent = types.SimpleNamespace(ask_ollama=fake_ask)
+        def instant(label, function, complete):
+            complete(function(threading.Event()))
+        with patch.object(self.chat, "_launch", side_effect=instant), \
+             patch.object(dev.engine_manager, "probe", return_value={
+                 "online": True, "models": ("qwen3:4b", "qwen2.5-coder:7b")}), \
+             patch.object(dev.engine_manager, "saved_chat_model",
+                          return_value="qwen3:4b"), \
+             patch.object(dev.engine_manager, "saved_coding_model",
+                          return_value="qwen2.5-coder:7b"), \
+             patch.dict(sys.modules, {"agent": fake_agent}):
+            self.chat.dispatch("/project python make a sample Python application")
+        self.assertEqual(selected, ["qwen2.5-coder:7b"])
+        with patch.object(self.chat, "_launch", side_effect=instant), \
+             patch.object(dev.engine_manager, "probe", return_value={
+                 "online": True, "models": ("qwen3:4b",)}), \
+             patch.object(dev.engine_manager, "saved_chat_model",
+                          return_value="qwen3:4b"), \
+             patch.object(dev.engine_manager, "saved_coding_model",
+                          return_value="missing-coder:latest"), \
+             patch.dict(sys.modules, {"agent": fake_agent}):
+            self.chat.dispatch("/project python make a sample Python application")
+        self.assertEqual(selected[-1], "qwen3:4b")
 
     def test_stop_cancels_active_work(self):
         token = threading.Event()
