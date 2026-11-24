@@ -73,6 +73,33 @@ class LocalEngineTests(unittest.TestCase):
                                   installed_models=("qwen3:4b", "llama3.2:3b")), "llama3.2:3b")
                 self.assertEqual(engine.saved_chat_model(), "llama3.2:3b")
 
+    def test_independent_coding_model_settings_and_chat_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "engine_model.json"
+            installed = ("qwen3:4b", "qwen2.5-coder:7b", "llama3.2:3b")
+            with patch.object(engine, "DATA", root), patch.object(engine, "CONFIG", config):
+                self.assertEqual(engine.saved_coding_model(), engine.saved_chat_model())
+                self.assertEqual(engine.save_coding_model(
+                    "qwen2.5-coder:7b", installed_models=installed), "qwen2.5-coder:7b")
+                self.assertEqual(engine.saved_coding_model(), "qwen2.5-coder:7b")
+                self.assertEqual(engine.saved_chat_model(), "qwen3:4b")
+                engine.save_chat_model("llama3.2:3b", installed_models=installed)
+                self.assertEqual(engine.saved_chat_model(), "llama3.2:3b")
+                self.assertEqual(engine.saved_coding_model(), "qwen2.5-coder:7b")
+                with self.assertRaises(engine.EngineError):
+                    engine.save_coding_model("missing:latest", installed_models=installed)
+                self.assertEqual(engine.saved_coding_model(), "qwen2.5-coder:7b")
+
+    def test_invalid_coding_config_falls_back_to_chat(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "engine_model.json"
+            config.write_text(json.dumps({
+                "chat_model": "llama3.2:3b",
+                "coding_model": "not a model ;"}), encoding="utf-8")
+            with patch.object(engine, "CONFIG", config):
+                self.assertEqual(engine.saved_coding_model(), "llama3.2:3b")
+
     def test_saved_bad_setting_falls_back(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "engine_model.json"
