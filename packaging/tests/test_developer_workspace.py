@@ -113,6 +113,12 @@ class DeveloperWorkspaceTests(unittest.TestCase):
             with self.subTest(kind=kind), self.assertRaises(dev.ProjectError):
                 dev.review_proposal(proposal(kind=kind))
 
+    def test_json_parse_errors_identify_location_without_execution(self):
+        with self.assertRaisesRegex(dev.ProjectError, "line 1, column"):
+            dev.parse_proposal('{"name": invalid}')
+        with self.assertRaisesRegex(dev.ProjectError, "Invalid JSON in config.json, line"):
+            dev.review_proposal(proposal({"config.json": '{"x": invalid}'}))
+
     def test_generated_json_rejects_ambiguous_data(self):
         bad = [
             '{"one": 1, "one": 2}',
