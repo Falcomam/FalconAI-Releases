@@ -90,7 +90,7 @@ replace_one(
     "developer_chat.py",
     '''        elif action == "project_new":
             self._generate(*payload)
-        elif action == "project_review":''',
+        elif action == "project_check":''',
     '''        elif action == "project_new":
             self._generate(*payload)
         elif action == "project_edit":
@@ -99,7 +99,7 @@ replace_one(
             self._diff()
         elif action == "project_rollback":
             self._rollback(*payload)
-        elif action == "project_review":''',
+        elif action == "project_check":''',
 )
 replace_one(
     "developer_chat.py",
