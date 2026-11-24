@@ -24,6 +24,7 @@ def plan(changes, *, trusted_checkout, trusted_sha256):
     reviewed = bridge.prepare_pinned_from_checkout(
         changes, trusted_checkout=trusted_checkout, trusted_sha256=trusted_sha256)
     files = []
+    any_manual_risk_review = False
     for item in reviewed["files"]:
         path = proposals._path(item["path"])
         if not HEX64.fullmatch(item["before_sha256"]) or not HEX64.fullmatch(item["after_sha256"]):
@@ -38,15 +39,21 @@ def plan(changes, *, trusted_checkout, trusted_sha256):
             static.append("toml_decode")
         else:
             static.append("manual_format_review")
+        advisory = item.get("risk_hints", {})
+        flagged = bool(advisory.get("manual_review_required"))
+        any_manual_risk_review |= flagged
         files.append({"path": path, "baseline_sha256": item["before_sha256"],
                       "proposed_sha256": item["after_sha256"], "static_checks": static,
-                      "line_changes": item["line_changes"]})
+                      "line_changes": item["line_changes"],
+                      "manual_risk_review_required": flagged,
+                      "advisory_risk_indicators": advisory.get("indicators", [])})
     return {
         "proposal_sha256": reviewed["fingerprint"],
         "file_count": len(files),
         "files": files,
         "static_review": "performed_without_executing_source",
         "dynamic_tests": "requires_approved_isolation",
+        "advisory_manual_risk_review_required": any_manual_risk_review,
         "dynamic_tests_executed": False,
         "installer_built": False,
         "deployment_approved": False,
