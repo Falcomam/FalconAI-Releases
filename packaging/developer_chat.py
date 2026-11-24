@@ -400,8 +400,11 @@ class ChatFeatures:
             sections.append("FILE: " + path + "\n" + clipped +
                             ("\n[File preview shortened. Use /project show " + path + "]"
                              if len(body) > 5000 else ""))
-        # Avoid dumping unbounded text into a single UI message.
-        self.pending["reviewed"] = True
+        # A clipped preview is never a complete review. Do not enable
+        # approval until every proposed source byte was visible.
+        preview = "\n\n".join(sections)
+        full_review = all(len(body) <= 5000 for _, body in items) and len(preview) <= 24000
+        self.pending["reviewed"] = full_review
         warnings = info.get("quality_warnings", ())
         warning_text = ("\nStatic HTML observations:\n" +
                         "\n".join("- " + warning for warning in warnings)
@@ -410,8 +413,11 @@ class ChatFeatures:
                  "\nSHA-256 proposal fingerprint: " + info["fingerprint"] +
                  "\nFiles are source text only; no code was run." +
                  warning_text + "\n\n" +
-                 "\n\n".join(sections)[:24000] +
-                 "\n\nAfter reviewing, type /project approve or /project reject.")
+                 preview[:24000] +
+                 ("\n\nApproval is BLOCKED: the review was clipped. "
+                  "Use a smaller project/edit so every changed source line can be reviewed."
+                  if not full_review else
+                  "\n\nAfter reviewing, type /project approve or /project reject."))
 
     def _show(self, path):
         if not self.pending:
