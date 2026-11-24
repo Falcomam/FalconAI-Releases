@@ -231,4 +231,27 @@ class MonitorTests(unittest.TestCase):
     "FalconAI.previous          Single backup next to installation\n"
     "Do not move launcher, helper, or files until Falcon is closed.\n",
     encoding="utf-8")
+
+# Update older version-specific restart assertions to the new shared helper contract.
+# Do not remove version, backup, rollback, or process-isolation checks.
+for rel in ("tests/test_v1361_restart.py", "tests/test_v1362_restart.py",
+            "tests/test_v1363_restart_button.py"):
+    path = target / rel
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    changed = 0
+    for i, line in enumerate(lines):
+        if "Get-Content -LiteralPath $bootLog" in line and "self.assertIn" in line:
+            lines[i] = "        self.assertIn('restart_helper.py', ps)\n"
+            changed += 1
+        elif "for s in (" in line and "Fallback python.exe process spawned" in line:
+            lines[i] = line.replace("'Fallback python.exe process spawned', 'Startup status log:'",
+                                    "'Restart helper started', 'restart_helper.py'")
+            changed += 1
+        elif "self.assertIn" in line and "Startup status log:" in line:
+            lines[i] = "        self.assertIn('restart_helper.py', ps)\n"
+            changed += 1
+    if changed == 0:
+        raise RuntimeError("No historical restart assertions updated in " + rel)
+    path.write_text("".join(lines), encoding="utf-8")
+
 print("Built 13.6.4 with optional mini monitor and shared restart helper")
