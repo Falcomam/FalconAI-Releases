@@ -24,6 +24,16 @@ class StaticCheckTests(unittest.TestCase):
         self.assertIn("Executed tests: NONE", check.render(report))
         self.assertTrue(any(f["static_gate"] == "python_ast_parsed" for f in report["files"]))
 
+    def test_third_party_imports_reported_without_importing(self):
+        plan = {"name": "demo", "kind": "python",
+                "files": {"main.py": "import requests\nimport json\nimport helper\n",
+                          "helper.py": "pass\n"}}
+        report = check.inspect(plan)
+        file = next(f for f in report["files"] if f["path"] == "main.py")
+        self.assertEqual(file["possible_external_imports"], ["requests"])
+        self.assertTrue(any("NOT checked" in w for w in report["warnings"]))
+        self.assertFalse(report["dependencies_installed"])
+
     def test_changed_draft_blocks_diagnostics(self):
         plan = {"name": "demo", "kind": "python",
                 "files": {"main.py": "pass\n"}}
