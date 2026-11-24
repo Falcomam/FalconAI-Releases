@@ -31,12 +31,13 @@ one("falcon.py", "from ollama_runtime import local_model_answer",
     "from ollama_runtime import local_model_answer\nimport engine_manager")
 one("falcon.py", "MODEL = 'qwen3:4b'",
     "MODEL = engine_manager.saved_chat_model()")
-one("falcon.py", "        self.entry.focus_set()\n",
+one("falcon.py", "        self.entry.focus_set()\n\n    def _build_command_center(self):",
     """        self.entry.focus_set()
         # Verify the actual local service asynchronously; never show a fake
         # 'Ready' status when Ollama has not started after Windows reboot.
         self.root.after(650, self.check_ai_engine)
-""")
+
+    def _build_command_center(self):""")
 one("falcon.py", """        updates = tk.Menu(self.root, tearoff=0)
 """, """        engine_menu = tk.Menu(self.root, tearoff=0)
         engine_menu.add_command(label='Check Ollama status', command=self.check_ai_engine)
