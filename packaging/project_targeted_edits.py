@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 
 import developer_workspace as projects
 import project_revision as revisions
@@ -121,3 +122,77 @@ def parse_targeted_changes(base, raw, context):
     return {"plan": replacement, "revision": review,
             "selected_paths": tuple(context["selected_files"]),
             "execution_allowed": False}
+
+
+def targeted_messages(base, goal, context):
+    """Minimal source context; no hidden source or external filesystem access."""
+    _base(base)
+    if context.get("source_fingerprint") != base["fingerprint"]:
+        raise projects.ProjectError("Selected context is stale")
+    selected = context.get("selected_files")
+    if not isinstance(selected, dict) or not selected:
+        raise projects.ProjectError("Selected source is missing")
+    for path, content in selected.items():
+        if base["plan"]["files"].get(path) != content:
+            raise projects.ProjectError("Selected source differs from trusted snapshot")
+    system = (
+        "You are Falcon's local targeted coding assistant. Return exactly one "
+        "strict JSON object with one key: changes. The value is a mapping of "
+        "relative POSIX source paths to the COMPLETE replacement file text. "
+        "Only edit selected existing files below or add plain-text source files "
+        "using safe paths. Never delete, rename, execute, download or install. "
+        "Do not include unchanged existing files or Markdown fences."
+    )
+    content = json.dumps({
+        "project_name": context["name"], "project_kind": context["kind"],
+        "goal": goal, "selected_files": selected,
+        "all_existing_paths": list(context["all_existing_paths"]),
+    }, ensure_ascii=False, separators=(",", ":"))
+    return [{"role": "system", "content": system},
+            {"role": "user", "content": content}]
+
+
+def generate_targeted_with_one_retry(base, goal, *, model, cancel, ask,
+                                     total_timeout=180, token_limit=6500):
+    """Return an inert merged revision; at most two bounded model attempts.
+
+    Ollama connection failures are surfaced unchanged. Only invalid source
+    proposals get a correction retry; STOP cancels without creating a revision.
+    """
+    if not callable(ask):
+        raise projects.ProjectError("Local coding model unavailable")
+    if not isinstance(token_limit, int) or not 1000 <= token_limit <= 10000:
+        raise projects.ProjectError("Unsafe coding output token limit")
+    if not isinstance(total_timeout, (int, float)) or not 10 <= total_timeout <= 300:
+        raise projects.ProjectError("Unsafe coding time budget")
+    context = select_context(base, goal)
+    messages = targeted_messages(base, goal, context)
+    deadline = time.monotonic() + total_timeout
+    last_error = None
+    for attempt in range(2):
+        if cancel.is_set():
+            return None
+        remaining = deadline - time.monotonic()
+        if remaining < 5:
+            raise projects.ProjectError("Targeted source edit time budget exhausted")
+        prompt = list(messages)
+        if attempt:
+            prompt.append({
+                "role": "user",
+                "content": "The previous changed-files JSON proposal was rejected: " +
+                str(last_error)[:160] +
+                ". Return an entirely new single strict JSON object with only "
+                "a changes mapping of full replacement text for selected files. "
+                "Do not rewrite, remove, or rename unselected existing paths.",
+            })
+        raw = ask(prompt, model=model, fmt="json",
+                  limit=token_limit, timeout=min(180, remaining), cancel=cancel)
+        if cancel.is_set():
+            return None
+        try:
+            return parse_targeted_changes(base, raw, context)
+        except projects.ProjectError as exc:
+            last_error = exc
+    raise projects.ProjectError(
+        "Targeted edit did not pass source review after two attempts: " +
+        str(last_error)[:200])
