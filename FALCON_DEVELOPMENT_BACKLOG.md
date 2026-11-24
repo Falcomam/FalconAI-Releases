@@ -32,7 +32,15 @@
 - Existing V13.8 websites with malformed HTML can be loaded for repair even though the **replacement** must pass new static HTML checks. No generated project code is executed.
 - Unit and staged Windows chat acceptance tests cover diff, review-before-approval, rejection, stale files, unsafe paths, malformed syntax, backup integrity, old-site repair and rollback: [verified Windows CI](https://github.com/Falcomam/FalconAI-Releases/actions/runs/45495562641).
 
-**Limits:** only previously saved Falcon projects, only existing source files (no add/delete/rename yet); full project rewrites may exceed a small local model's context size. No EXE/installer was published for this work. The next major release still requires packaged Windows GUI/installer and in-place upgrade/relaunch tests.
+**Limits:** only previously saved Falcon projects; edits can change and **add** approved plain-text source files. Deletion and renaming remain blocked. Full project rewrites may exceed a small local model's context size. No EXE/installer was published for this work. The next major release still requires packaged Windows GUI/installer and in-place upgrade/relaunch tests.
+
+## Extend existing projects with new source files (development candidate, 2026-11-24)
+
+- Falcon can now propose **new project source files** as part of `/project edit`, alongside changes to existing files. Review displays their `/dev/null` diff; `/project approve` still requires an explicit review and exact SHA-256 proposal fingerprint. All original file paths must remain.
+- New destinations use exclusive file creation, rejecting existing paths instead of silently overwriting; path traversal, redirected folders, changed originals, invalid syntax and unexpected project-type changes are refused.
+- Revision backups track changed originals and which new files and directories Falcon created; explicit rollback restores originals, removes approved new files only when the current snapshot is unchanged, and keeps user-created or pre-existing folders.
+- Windows regression tests include nested additions, add-only proposals, mixed edits/additions, actual chat approval and rollback, bad paths, symlink attacks, stale edits and pre-existing directory retention: [source and chat test result](https://github.com/Falcomam/FalconAI-Releases/actions/runs/45497770802).
+- **No automatic execution or installation of generated code**. Source validation is not the same as executing a program. Full packaged GUI/installer, v13.8.0 upgrade/relaunch and user-data checks remain release gates.
 
 ## Saved-project browser in Falcon's main chat (development candidate, 2026-11-24)
 
@@ -43,6 +51,8 @@
 - **Not yet released:** This remains part of the next substantial Windows installer bundle, pending frozen app, full installer, v13.8.0 upgrade/relaunch and user-data-preservation tests.
 
 ## Reliability / interface milestones
+
+6a. **Optional PC-powered build/test worker:** Later investigate an explicit opt-in Windows worker on the user's own main PC that only pulls trusted Falcon sources and runs *pre-approved* builds/tests in an isolated directory with resource limits, STOP, logs, and no unrestricted remote desktop/filesystem access. This would add compute for model inference, builds and local testing; it would **not** make the ChatGPT model faster or automatically grant cloud ChatGPT access to the PC. No worker is connected or deployed yet.
 
 7. **Ollama resilience:** local-only health checks and reconnect; optional start action; error handling when model missing, exhausted memory, or server stops mid-request. No silent installations.
 8. **Unified dark-purple redesign:** cleaner message blocks, command picker integrated into composer, responsive screen sizes, readable code/diffs, subtle copy affordance, falcon icon branding, accessible contrast and keyboard navigation. Keep GUI lightweight and familiar.
