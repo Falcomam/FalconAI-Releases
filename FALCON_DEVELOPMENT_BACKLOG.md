@@ -24,6 +24,14 @@
 - No new public installer/release tag was created. User-installed V13.9.1 stays untouched. These are **development source** features, not claims of installed capabilities.
 - Actual model-generated code execution, compiling arbitrary apps, running Fabric toolchains, networked dependency installs and autonomous Falcon EXE replacement remain **not implemented**. A future isolated worker will require explicit permission, verified sandbox boundaries, resource limits, STOP/cancellation and trustworthy build approvals.
 
+### Final focused-edit and clipped-review safety gates
+
+- Focused-edit mode is staged as `/project edit-small <saved_name> <request>`, not yet installed. It uses the existing diff+approval+backup+rollback workflow; Windows staged integration tests exercised full temporary-workspace save and explicit rollback.
+- Context selection combines bounded filename and source-word relevance, protects user-named files against silently being omitted, and reports files that exceed context limits rather than writing a partial replacement. Two model attempts at most, with one overall deadline and STOP support.
+- **Approval-safety fix:** new project previews >5,000 characters per file or >24,000 characters total can no longer mark a draft as fully reviewed. Staged saved-project revision diffs >26,000 characters likewise refuse approval; user needs smaller changes until complete paged approval is integrated.
+- Cross-platform main source regression and staged Windows chat/browsing regression cover these checks. Verify exact head CI before claiming the installer is version-ready. Internal Windows candidate tests deliberately do **not** publish.
+- Follow-up usability work: add complete paged source review for generated project files so very large drafts can safely be approved, instead of permanently blocking them on truncated previews.
+
 ### Next milestones
 
 1. Verify final cross-platform targeted-edit and final internal Windows installer gates on the exact candidate SHA; repair failures before publishing any version.
