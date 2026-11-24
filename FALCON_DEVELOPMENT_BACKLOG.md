@@ -21,6 +21,19 @@
 5. **Project packaging:** For websites show preview instructions; for Python create environment scaffolding/requirements; for Fabric mod starters validate version compatibility before promising runnable jars. Ask permission for dependency installs, builds and executables.
 6. **Long-project management:** Small project index in the main chat, reopen a saved draft, file list, code search and inline diffs. No new AI windows.
 
+## In-chat saved-project revisions — development candidate (2026-11-24)
+
+**Implemented and verified in Windows source/functional CI (not yet released):**
+
+- `/project edit <saved_name> <request>` loads only an existing Falcon-owned developer project, supplies those bounded source files to the local coding model, and requires the same filename set/name/type in its JSON response.
+- `/project diff` and `/project review` display a source-only unified diff and fingerprint in the original Falcon chat; `/project show <file>` still previews proposed source.
+- `/project approve` cannot save until a review. Saves only when original project contents and proposed SHA-256 fingerprint are unchanged; makes exact-byte backup outside the project before changing anything.
+- `/project rollback <name> <backup_id>` explicitly restores the saved snapshot **only if neither the user's current files nor backup contents have been modified**, protecting later edits from being overwritten.
+- Existing V13.8 websites with malformed HTML can be loaded for repair even though the **replacement** must pass new static HTML checks. No generated project code is executed.
+- Unit and staged Windows chat acceptance tests cover diff, review-before-approval, rejection, stale files, unsafe paths, malformed syntax, backup integrity, old-site repair and rollback: [verified Windows CI](https://github.com/Falcomam/FalconAI-Releases/actions/runs/45495562641).
+
+**Limits:** only previously saved Falcon projects, only existing source files (no add/delete/rename yet); full project rewrites may exceed a small local model's context size. No EXE/installer was published for this work. The next major release still requires packaged Windows GUI/installer and in-place upgrade/relaunch tests.
+
 ## Reliability / interface milestones
 
 7. **Ollama resilience:** local-only health checks and reconnect; optional start action; error handling when model missing, exhausted memory, or server stops mid-request. No silent installations.
