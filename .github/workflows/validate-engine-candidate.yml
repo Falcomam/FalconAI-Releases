@@ -1,0 +1,60 @@
+name: Validate Falcon Ai engine manager development candidate
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packaging/engine_manager.py"
+      - "packaging/prepare_engine_candidate.py"
+      - "packaging/tests/test_engine_manager.py"
+      - ".github/workflows/validate-engine-candidate.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests for local-only connections and consent
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s packaging/tests -p test_engine_manager.py -v
+      - name: Reconstruct prior release and stage changes without publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          for patch in v13.6 v13.6.1 v13.6.2 v13.6.3 v13.6.4 v13.6.5; do
+            python "patches/$patch/apply.py"
+          done
+          python packaging/prepare.py
+          python -m pip install 'Pillow>=11.0'
+          python packaging/prepare_icon_release.py
+          python packaging/prepare_engine_candidate.py
+          python -m compileall -q build/Falcon_Ai_Engine_Candidate
+          python -m py_compile build/falcon_app_1371_runtime/app_entry_engine_candidate.py
+          python - <<'PY'
+          from pathlib import Path
+          root=Path('build/Falcon_Ai_Engine_Candidate')
+          original=Path('build/Falcon_Ai_App_V13_7_1')
+          entry=Path('build/falcon_app_1371_runtime/app_entry_engine_candidate.py').read_text(encoding='utf-8')
+          source=(root/'falcon.py').read_text(encoding='utf-8')
+          assert (root/'RELEASE_VERSION.txt').read_text().strip()=='13.7.1'
+          assert (original/'RELEASE_VERSION.txt').read_text().strip()=='13.7.1'
+          assert source!=(original/'falcon.py').read_text(encoding='utf-8')
+          assert "tools.add_cascade(label='AI Engine'" in source
+          assert 'self.root.after(650, self.check_ai_engine)' in source
+          assert "MODEL = engine_manager.saved_chat_model()" in source
+          assert 'engine_manager.start_ollama(confirmed=True)' in source
+          assert "engine_manager.save_chat_model(" in source
+          assert "os.environ['FALCON_CHAT_MODEL'] = engine_manager.saved_chat_model()" in entry
+          assert 'from engine_manager import ' not in entry
+          assert 'app_updates' in entry
+          print('PASS: staged UI, async health check, selected model, explicit launch, packaged entry')
+          print('PASS: existing released 13.7.1 source and installer updater unchanged')
+          PY
