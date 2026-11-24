@@ -132,6 +132,22 @@ class ProjectRevisionTests(unittest.TestCase):
         edits.rollback_revision("myapp", out["backup_id"], workspace=self.workspace)
         self.assertFalse((self.workspace / "myapp/settings.json").exists())
 
+    def test_rollback_keeps_preexisting_empty_project_directory(self):
+        existing = self.workspace / "myapp/src"
+        existing.mkdir()
+        initial = edits.load_project("myapp", workspace=self.workspace)
+        proposal = self.modified()
+        proposal["files"]["src/new.py"] = "pass\n"
+        review = edits.review_revision(initial, proposal)
+        out = edits.save_revision_approved(initial, proposal, review["new_fingerprint"],
+                                          workspace=self.workspace)
+        record = json.loads((self.workspace / edits.BACKUPS_FOLDER / "myapp" /
+                             out["backup_id"] / "revision.json").read_text())
+        self.assertEqual(record["created_dirs"], [])
+        edits.rollback_revision("myapp", out["backup_id"], workspace=self.workspace)
+        self.assertTrue(existing.is_dir())
+        self.assertFalse((existing / "new.py").exists())
+
     def test_added_file_not_silently_overwritten_if_existing(self):
         original = edits.load_project("myapp", workspace=self.workspace)
         new = self.modified()
