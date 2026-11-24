@@ -123,6 +123,10 @@ def review_revision(base, new_plan):
         raise projects.ProjectError("Revisions cannot rename or change the project type")
     if not set(original["files"]).issubset(proposed["files"]):
         raise projects.ProjectError("Revisions cannot delete or rename existing files")
+    # Type inference is based on well-known filenames. Never allow a revision
+    # that will become unreadable as the original project kind after saving.
+    if _infer_kind(proposed["files"]) != original["kind"]:
+        raise projects.ProjectError("Added file would change the detected project type")
     added = tuple(path for path in proposed["files"]
                   if path not in original["files"])
     updated = tuple(path for path in original["files"]
