@@ -72,14 +72,14 @@ def revision_messages(base, goal):
     # It cannot retrieve unrelated user files or approve writing any changes.
     return [
         {"role": "system", "content": SYSTEM + " For this revision, preserve "
-         "exactly the original project name, kind and all existing file paths. "
-         "Return ALL complete source files, changed and unchanged. "
-         "Do not add, delete or rename files. Make only the requested edits. "
+         "the original project name, kind and every original file path. "
+         "Return ALL complete existing files plus any new plain-text source files. "
+         "You MAY add safe source files, but never delete or rename existing files. "
          "Nothing is executed and approval is always required."},
         {"role": "user", "content":
          "Edit this existing Falcon project: " + goal.strip() +
          "\\nOriginal project JSON:\\n" + json.dumps(plan, ensure_ascii=False) +
-         "\\nReturn one valid JSON replacement proposal with the same files."},
+         "\\nReturn one valid JSON replacement proposal retaining all old files and optional new source files."},
     ]
 
 
@@ -146,7 +146,7 @@ replace_one(
             changed = output["revision"]["changed"]
             self.say("Project edit proposal ready (NOT saved or executed).\\n"
                      "Project: " + name +
-                     "\\nChanged existing files: " + str(len(changed)) +
+                     "\\nChanged or added source files: " + str(len(changed)) +
                      "\\n" + "\\n".join("- " + path for path in changed) +
                      "\\nType /project diff to inspect exact changes, "
                      "/project review to inspect full files, "
@@ -164,7 +164,7 @@ replace_one(
         warnings = revision.get("quality_warnings", ())
         self.say("REVIEW REVISION: " + self.pending["plan"]["name"] +
                  "\\nSHA-256 proposal fingerprint: " + revision["new_fingerprint"] +
-                 "\\nChanged files: " + ", ".join(revision["changed"]) +
+                 "\\nChanged/added files: " + ", ".join(revision["changed"]) +
                  "\\nSource-only diff; nothing was executed." +
                  ("\\nStatic warnings: " + "; ".join(warnings) if warnings else "") +
                  "\\n\\n" + diff[:26000] +
@@ -220,7 +220,7 @@ replace_one(
                 return
             self.pending = None
             self.say("Saved reviewed changes to " + result["project"] +
-                     "\\nChanged files: " + ", ".join(result["changed"]) +
+                     "\\nChanged/added files: " + ", ".join(result["changed"]) +
                      "\\nBackup ID: " + result["backup_id"] +
                      "\\nTo restore, type /project rollback " +
                      info["plan"]["name"] + " " + result["backup_id"] +
