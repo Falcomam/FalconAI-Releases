@@ -1,5 +1,5 @@
 name: Build and release Falcon Ai 13.7.1 Windows app
-# Inno Setup 6 directive compatibility corrected
+# Purple icon verified from GitHub source; adjusted launcher anchor after Windows CI
 
 on:
   push:
