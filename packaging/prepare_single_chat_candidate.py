@@ -54,6 +54,13 @@ replace_one("falcon.py",
     "            self.append('Falcon', 'Gaming Mode ON: local AI requests are paused. Type /engine gaming off to resume.')\n"
     "            return\n"
     "        if self.workflow.dispatch(prompt):\n            return\n        self.chat_message(prompt)")
+# Respect a saved Gaming Mode setting when boot-time Ollama health checks
+# complete; otherwise a green "Ready" label would contradict the pause.
+replace_one("falcon.py",
+    "                else:\n                    self.set_status('Ready • ' + selected)\n",
+    "                else:\n"
+    "                    self.set_status('Gaming Mode ON • AI paused' if developer_chat.gaming_mode.enabled() else 'Ready • ' + selected)\n")
+
 replace_one("falcon.py",
     "        if hasattr(self, 'workflow'):\n            self.workflow.stop()\n",
     "        if hasattr(self, 'workflow'):\n            self.workflow.stop()\n"
