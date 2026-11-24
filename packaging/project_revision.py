@@ -285,6 +285,12 @@ def save_revision_approved(base, new_plan, approved_fingerprint, *, workspace=pr
                     if staged.exists():
                         staged.unlink()
                 written.append(path)
+            # Persist only directories that this save actually created.
+            # A failed metadata write must trigger the same rollback path.
+            metadata["created_dirs"] = [p.relative_to(project).as_posix()
+                                        for p in created_folders]
+            with (backup / "revision.json").open("w", encoding="utf-8") as f:
+                json.dump(metadata, f, ensure_ascii=False, indent=2)
         except Exception:
             # Back out only writes that this operation actually completed. A
             # changed user file must never be removed just for convenience.
@@ -306,13 +312,6 @@ def save_revision_approved(base, new_plan, approved_fingerprint, *, workspace=pr
                     pass
             _remove_empty_folders(created_folders)
             raise
-        # Persist only directories that this save actually created. Rollback
-        # must not delete pre-existing empty directories.
-        metadata["created_dirs"] = [p.relative_to(project).as_posix()
-                                    for p in created_folders]
-        metadata_path = backup / "revision.json"
-        with metadata_path.open("w", encoding="utf-8") as f:
-            json.dump(metadata, f, ensure_ascii=False, indent=2)
         return {"project": str(project), "backup_id": backup_id,
                 "changed": changes, "added": reviewed["added"], "executed": False}
     except BaseException:
