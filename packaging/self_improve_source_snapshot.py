@@ -33,8 +33,17 @@ def _check_root(root):
         raise proposals.ProposalError("Explicit trusted checkout root required")
     folder = Path(root).absolute()
     try:
-        if not folder.is_dir() or _redirected(folder):
-            raise proposals.ProposalError("Checkout root is missing or redirected")
+        if not folder.is_dir():
+            raise proposals.ProposalError("Checkout root is missing")
+        # A clean final component is insufficient if an ancestor redirects
+        # elsewhere. Explicit trusted checkout selection must stay in its tree.
+        cursor = folder
+        while True:
+            if _redirected(cursor):
+                raise proposals.ProposalError("Checkout path contains a redirected directory")
+            if cursor.parent == cursor:
+                break
+            cursor = cursor.parent
         marker = folder / MARKER
         if not marker.is_file() or _redirected(marker):
             raise proposals.ProposalError("Falcon development checkout marker missing")
