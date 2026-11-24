@@ -4,6 +4,10 @@ on:
     branches: [main]
     paths:
       - "packaging/project_browser.py"
+      - "packaging/project_revision.py"
+      - "packaging/prepare_project_revision_candidate.py"
+      - "packaging/tests/test_project_revision.py"
+      - "packaging/tests/test_project_revision_chat.py"
       - "packaging/prepare_project_browser_candidate.py"
       - "packaging/tests/test_project_browser.py"
       - "packaging/tests/test_project_browser_chat.py"
