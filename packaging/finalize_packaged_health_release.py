@@ -43,6 +43,11 @@ def main():
             raise RuntimeError(f"Release version anchor mismatch: {path.name} -> {old!r}")
     for path, old, new in changes:
         replace_exact(path, old, new)
+    # Release bundles must not retain staging-only markers.
+    for marker in ("NEXT_BUNDLE_TEST_CANDIDATE_ONLY.txt",
+                   "POST_139_PACKAGED_DIAGNOSTICS_DEV_ONLY.txt",
+                   "POST_139_MINIMIZED_POWERSHELL_DEV_ONLY.txt"):
+        (SOURCE / marker).unlink(missing_ok=True)
     (SOURCE / "README_FALCON_AI_V13_9_1.txt").write_text(
         "Falcon Ai V13.9.1 - packaged diagnostics repair\n"
         "- Replaces legacy loose .py/.bat self-checks with 13 packaged runtime checks.\n"
