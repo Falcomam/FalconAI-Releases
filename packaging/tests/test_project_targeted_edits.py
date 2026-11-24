@@ -71,7 +71,7 @@ class TargetedEditsTests(unittest.TestCase):
         calls = []
         def ask(*args, **kwargs):
             calls.append(1)
-            return '{"changes":{"main.py":"pass"}}'
+            return '{"changes":{"../escape.py":"pass"}}'
         with patch.object(revisions, "save_revision_approved",
                           side_effect=AssertionError("unexpected save")):
             with self.assertRaisesRegex(projects.ProjectError, "after two attempts"):
