@@ -11,6 +11,7 @@ import re
 import threading
 
 import developer_workspace as projects
+import developer_generation
 import engine_manager
 
 _PROJECT = re.compile(r"^/project(?:\s+(.*))?$", re.I | re.S)
@@ -288,15 +289,9 @@ class ChatFeatures:
             if cancel.is_set():
                 return None
             import agent
-            raw = agent.ask_ollama(messages, model=model, fmt="json",
-                                   limit=4600, timeout=180, cancel=cancel)
-            if cancel.is_set():
-                return None
-            candidate = projects.parse_proposal(raw)
-            if candidate["kind"] != kind:
-                raise projects.ProjectError("AI response used the wrong project type")
-            return {"name": candidate["name"], "kind": candidate["kind"],
-                    "files": candidate["files"]}
+            return developer_generation.generate_with_one_retry(
+                kind=kind, messages=messages, model=model, cancel=cancel,
+                ask=agent.ask_ollama)
 
         def complete(plan):
             if plan is None:
