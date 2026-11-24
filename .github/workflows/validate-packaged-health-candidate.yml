@@ -82,7 +82,7 @@ jobs:
           assert "source-file self-upgrade is unavailable" in upgrade.lower()
           assert "Source-file self-upgrade" in upgrade
           assert "Falcon Ai.exe" in diagnostics and "app_update_restart.ps1" in diagnostics
-          assert "START_HERE.bat" not in diagnostics
+          assert "REQUIRED_FILES = (\"Falcon Ai.exe\", \"app_update_restart.ps1\")" in diagnostics
           assert "No code has changed" in improve
           assert "quiet_powershell.minimized_startupinfo" in (runtime/"app_updates.py").read_text()
           print("PASS: runtime health-source policy and legacy source-upgrade guard staged")
