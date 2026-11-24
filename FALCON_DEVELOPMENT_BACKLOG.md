@@ -34,6 +34,14 @@
 
 **Limits:** only previously saved Falcon projects, only existing source files (no add/delete/rename yet); full project rewrites may exceed a small local model's context size. No EXE/installer was published for this work. The next major release still requires packaged Windows GUI/installer and in-place upgrade/relaunch tests.
 
+## Saved-project browser in Falcon's main chat (development candidate, 2026-11-24)
+
+- Implemented read-only `/project list`, `/project open <saved_name>`, and `/project show <relative_file>` for safely inspecting prior Falcon-owned Developer Mode projects.
+- The organized Commands menu contains List and Open shortcuts; the project catalog is bounded (50 visible names / 500 scanned directory entries). No command executes project source or reads outside Falcon's developer workspace.
+- Opening a project does not approve any code changes. It refuses to displace an active review; file previews check the snapshot fingerprint and refuse stale or modified data, unsafe paths, redirected files and symlinks. Existing STOP and review/approval behavior stays unchanged.
+- Passed combined native Windows source, Python and one-chat regression suites including previous project-revision feature. [CI evidence](https://github.com/Falcomam/FalconAI-Releases/actions/runs/45496335846).
+- **Not yet released:** This remains part of the next substantial Windows installer bundle, pending frozen app, full installer, v13.8.0 upgrade/relaunch and user-data-preservation tests.
+
 ## Reliability / interface milestones
 
 7. **Ollama resilience:** local-only health checks and reconnect; optional start action; error handling when model missing, exhausted memory, or server stops mid-request. No silent installations.
