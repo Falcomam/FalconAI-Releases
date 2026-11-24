@@ -115,7 +115,8 @@ class CommandPaletteTests(unittest.TestCase):
         self.assertIn("TAB", tab.suggestion("/project"))
         self.assertEqual(tab.suggestion("ordinary chat")[:3], "TAB")
         self.assertEqual(tab.complete("/foobar"), None)
-        self.assertEqual(tab.complete("/engine st"), "/engine status")
+        self.assertEqual(tab.complete("/engine st"), "/engine sta")
+        self.assertEqual(tab.complete("/engine sta"), "/engine status")
 
     def test_legacy_entry_keeps_enter_to_send(self):
         e = FakeEntry()
