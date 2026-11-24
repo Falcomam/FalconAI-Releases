@@ -9,6 +9,7 @@ import ast
 import hashlib
 import hmac
 import json
+import sys
 import tomllib
 
 import developer_workspace as projects
@@ -24,14 +25,34 @@ def inspect(plan, expected_fingerprint=None):
     files = []
     total_lines = 0
     warnings = list(review["quality_warnings"])
+    project_roots = {name.rsplit("/", 1)[-1][:-3]
+                     for name in review["files"] if name.endswith(".py")}
+    stdlib = (set(getattr(sys, "stdlib_module_names", ()))
+              | set(sys.builtin_module_names))
     for path, contents in sorted(review["files"].items()):
         extension = path.rsplit(".", 1)[-1].lower() if "." in path else "other"
         raw = contents.encode("utf-8")
         lines = len(contents.splitlines())
         total_lines += lines
         static_gate = "text_review_only"
+        external_import_candidates = []
         if extension == "py":
-            ast.parse(contents, filename=path)
+            tree = ast.parse(contents, filename=path)
+            imports = set()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    imports.update(item.name.partition(".")[0] for item in node.names)
+                elif (isinstance(node, ast.ImportFrom)
+                      and node.level == 0 and node.module):
+                    imports.add(node.module.partition(".")[0])
+            external_import_candidates = sorted(
+                name for name in imports
+                if name and name not in stdlib and name not in project_roots)
+            if external_import_candidates:
+                warnings.append(
+                    path + ": possible third-party imports: " +
+                    ", ".join(external_import_candidates[:12]) +
+                    "; installation and package compatibility NOT checked")
             static_gate = "python_ast_parsed"
         elif extension == "json":
             json.loads(contents)
@@ -49,6 +70,7 @@ def inspect(plan, expected_fingerprint=None):
             "path": path, "bytes": len(raw), "lines": lines,
             "sha256": hashlib.sha256(raw).hexdigest(),
             "static_gate": static_gate,
+            "possible_external_imports": external_import_candidates,
         })
     return {
         "project": review["name"],
