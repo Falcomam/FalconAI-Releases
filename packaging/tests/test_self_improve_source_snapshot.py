@@ -1,0 +1,76 @@
+"""Source snapshot loader never executes, writes or follows redirected paths."""
+from pathlib import Path
+import sys
+import tempfile
+import unittest
+from unittest.mock import patch
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import self_improve_source_snapshot as snapshots
+import self_improve_proposals as proposals
+import self_improve_review_bridge as bridge
+
+
+class SourceSnapshotTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name) / "checkout"
+        (self.root / "packaging").mkdir(parents=True)
+        (self.root / snapshots.MARKER).write_text("# Falcon backlog", encoding="utf-8")
+        (self.root / "packaging" / "engine.py").write_text("def speed():\n    return 1\n", encoding="utf-8")
+
+    def test_safe_read_and_proposal_baseline(self):
+        snapshot = snapshots.read_snapshot(self.root, ["packaging/engine.py"])
+        self.assertEqual(snapshot["packaging/engine.py"], "def speed():\n    return 1\n")
+        changes = {"packaging/engine.py": {"before": snapshot["packaging/engine.py"],
+                                            "after": "def speed():\n    return 2\n"}}
+        self.assertTrue(bridge.prepare(changes, snapshot)["fingerprint"])
+
+    def test_unknown_checkout_without_marker_rejected(self):
+        (self.root / snapshots.MARKER).unlink()
+        with self.assertRaises(proposals.ProposalError):
+            snapshots.read_snapshot(self.root, ["packaging/engine.py"])
+
+    def test_symlink_file_and_directory_rejected(self):
+        outside = Path(self.tmp.name) / "outside.py"
+        outside.write_text("pass\n")
+        link = self.root / "packaging" / "link.py"
+        try:
+            link.symlink_to(outside)
+        except (OSError, NotImplementedError):
+            self.skipTest("Symlinks unavailable")
+        with self.assertRaises(proposals.ProposalError):
+            snapshots.read_snapshot(self.root, ["packaging/link.py"])
+        redirected = self.root / "redirect"
+        try:
+            redirected.symlink_to(self.root / "packaging", target_is_directory=True)
+        except (OSError, NotImplementedError):
+            return
+        with self.assertRaises(proposals.ProposalError):
+            snapshots.read_snapshot(self.root, ["redirect/engine.py"])
+
+    def test_paths_limits_and_missing_file(self):
+        for requested in (["../escape.py"], ["packaging/missing.py"],
+                          ["packaging/engine.py", "PACKAGING/ENGINE.PY"],
+                          [f"a{i}.py" for i in range(13)]):
+            with self.subTest(requested=requested), self.assertRaises(proposals.ProposalError):
+                snapshots.read_snapshot(self.root, requested)
+
+    def test_oversized_and_invalid_encoding_rejected(self):
+        target = self.root / "packaging" / "engine.py"
+        target.write_bytes(b"x" * (proposals.MAX_FILE_BYTES + 1))
+        with self.assertRaises(proposals.ProposalError):
+            snapshots.read_snapshot(self.root, ["packaging/engine.py"])
+        target.write_bytes(b"\xff")
+        with self.assertRaises(proposals.ProposalError):
+            snapshots.read_snapshot(self.root, ["packaging/engine.py"])
+
+    def test_read_only_no_subprocess_or_writes(self):
+        with patch("subprocess.run", side_effect=AssertionError("execution forbidden")), \
+             patch("subprocess.Popen", side_effect=AssertionError("execution forbidden")):
+            self.assertEqual(len(snapshots.read_snapshot(self.root, ["packaging/engine.py"])), 1)
+
+
+if __name__ == "__main__":
+    unittest.main()
