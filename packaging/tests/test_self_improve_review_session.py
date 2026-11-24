@@ -154,6 +154,16 @@ class ReviewSessionTests(unittest.TestCase):
         events[0]["event"] = "tampered"
         self.assertEqual(self.session.audit()[0]["event"], "proposal_submitted")
 
+    def test_audit_log_is_bounded_and_discloses_omissions(self):
+        self.session.submit(self.changes)
+        for _ in range(sessions.MAX_AUDIT_EVENTS + 10):
+            self.session.show_review_page(0)
+        events = self.session.audit()
+        self.assertEqual(events[0]["event"], "older_events_omitted")
+        self.assertEqual(events[0]["count"], 11)
+        self.assertEqual(len(events), sessions.MAX_AUDIT_EVENTS + 1)
+        self.assertNotIn("def run", str(events))
+
     def test_never_executes_untrusted_code(self):
         with patch("subprocess.run", side_effect=AssertionError("unsafe")), \
              patch("subprocess.Popen", side_effect=AssertionError("unsafe")):
