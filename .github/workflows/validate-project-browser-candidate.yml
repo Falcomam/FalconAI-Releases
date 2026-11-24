@@ -78,7 +78,10 @@ jobs:
           assert 'project_revision as revisions' in chat
           assert 'import html_quality' in (target/'developer_workspace.py').read_text(encoding='utf-8')
           assert '/project list' in command and '/project open ' in command
-          assert 'project_browser' not in (old/'developer_chat.py').read_text(encoding='utf-8')
+          # The earlier staged version must not expose/open saved project browsing.
+          # A dormant static-check code path in developer_chat does not enable it.
+          assert not (old/'project_browser.py').exists()
+          assert 'self.opened = ' not in (old/'developer_chat.py').read_text(encoding='utf-8')
           assert (old/'RELEASE_VERSION.txt').read_text(encoding='utf-8').strip()=='13.8.0'
           assert (target/'RELEASE_VERSION.txt').read_text(encoding='utf-8').strip()=='13.8.0'
           print('PASS: read-only project list/open/show, single chat, version unchanged')
