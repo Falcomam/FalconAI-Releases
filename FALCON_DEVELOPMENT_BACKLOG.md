@@ -11,6 +11,14 @@
 - GitHub Windows CI passed source regression, frozen EXE smoke, clean install, v13.8.0 -> v13.9.0 installer upgrade/relaunch and preserved user data. **Do not mistake this for user-hardware acceptance testing.**
 - Next development work is post-v13.9.0 and must remain development-only until a new substantial tested package is released. Never rewrite v13.9.0 GitHub Release assets.
 
+## Post-v13.9.0 tested development: read-only source search + minimized update PowerShell
+
+- `/project open <saved_name>` then `/project search <phrase>`: read-only source search in the **one already opened Falcon-owned developer project only**. Bounded to 25 line excerpts with filename/line info and stale snapshot fingerprint verification. Supports Unicode symbols and never accesses unrelated directories or executes source code.
+- Updated the **internal installer-updater PowerShell** launch for future versions to use `-WindowStyle Minimized` and Windows `STARTF_USESHOWWINDOW/SW_SHOWMINNOACTIVE`. User-requested terminals and Ollama permissions remain unchanged, logs remain in `LOCALAPPDATA/FalconAI/logs/app_installer_update.log`.
+- The installed Windows `Falcon Ai.exe` is already built as a windowed, no-console GUI; normal Start Menu and Desktop shortcuts point to this EXE. An older shortcut pointing to `START_HERE.bat` or `powershell.exe` can still show a console and must be repinned to the current EXE (not something fixed by minimizing the updater helper).
+- **Verified on Windows CI:** [source + in-chat + minimized PowerShell mocked-process tests](https://github.com/Falcomam/FalconAI-Releases/actions/runs/45500259624). This does **not** include a new installer or actual GUI update on the user's PC.
+- **Release policy:** Remains post-13.9 development work, for a future tested bundled release. Do not rewrite published v13.9.0 or claim the current installed version has this fix.
+
 ## Post-v13.9.0 priorities
 
 1. Improve coding model output quality and show actionable static code diagnostics.
