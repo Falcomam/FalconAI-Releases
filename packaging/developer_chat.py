@@ -157,8 +157,11 @@ class ChatFeatures:
         elif action == "project_approve":
             self._approve()
         elif action == "project_reject":
-            self.pending = None
-            self.say("Project proposal rejected. No files were written.")
+            if self._running:
+                self.say("Falcon is generating a project. Press STOP before rejecting the current draft.")
+            else:
+                self.pending = None
+                self.say("Project proposal rejected. No files were written.")
         elif action == "project_status":
             if self._running:
                 self.say("Developer Mode is drafting your project. Press STOP to cancel.")
@@ -311,7 +314,7 @@ class ChatFeatures:
         except projects.ProjectError as exc:
             self.say(str(exc) + "\n" + PROJECT_HELP)
             return
-        self.pending = None
+        # Preserve the existing reviewed draft until a valid replacement arrives.
 
         def work(cancel):
             status = engine_manager.probe(timeout=3)
