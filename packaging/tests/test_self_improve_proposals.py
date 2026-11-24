@@ -47,6 +47,19 @@ class SelfImproveProposalTests(unittest.TestCase):
         with self.assertRaises(sip.ProposalError):
             sip.review({"x.json": {"before": "{}", "after": "{broken"}})
 
+    def test_python_risk_hints_are_review_only(self):
+        changed = {"engine.py": {
+            "before": "def old():\n    return 1\n",
+            "after": "import subprocess\nsubprocess.Popen(['python', '--version'])\n",
+        }}
+        result = sip.review(changed)
+        risks = result["files"][0]["risk_hints"]
+        self.assertTrue(risks["manual_review_required"])
+        self.assertTrue(risks["advisory_only"])
+        self.assertTrue(any("subprocess.Popen" in item["indicator"]
+                            for item in risks["indicators"]))
+        self.assertFalse(result["installation_allowed"])
+
     def test_toml_and_line_count_validation(self):
         before = 'enabled = true\n'
         after = 'enabled = false\nextra = 2\n'
