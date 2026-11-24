@@ -1,5 +1,6 @@
 """Bounded targeted edits preserve untouched source and existing review gates."""
 import json
+import threading
 from pathlib import Path
 import sys
 import unittest
@@ -20,6 +21,64 @@ class TargetedEditsTests(unittest.TestCase):
                           "src/notes.txt": "do not touch this file\n"}}
         self.base = {"plan": plan,
                      "fingerprint": revisions._snapshot_fingerprint(plan)}
+
+    def test_targeted_model_retry_keeps_other_files_unchanged(self):
+        calls = []
+        def ask(messages, **kwargs):
+            calls.append((messages, kwargs))
+            if len(calls) == 1:
+                return "not json"
+            return json.dumps({"changes": {
+                "helpers.py": "def answer():\n    return 42\n"}})
+        output = targeted.generate_targeted_with_one_retry(
+            self.base, "Update helpers.py so answer returns 42",
+            model="qwen3:4b", cancel=threading.Event(), ask=ask)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(output["revision"]["changed"], ("helpers.py",))
+        self.assertEqual(output["plan"]["files"]["main.py"],
+                         self.base["plan"]["files"]["main.py"])
+        self.assertTrue(all("all_existing_paths" in calls[0][0][1]["content"]
+                            for _ in (0,)))
+        self.assertFalse(output["execution_allowed"])
+
+    def test_targeted_cancel_avoids_retry_or_write(self):
+        token = threading.Event()
+        calls = []
+        def ask(messages, **kwargs):
+            calls.append(1)
+            token.set()
+            return "not json"
+        with patch.object(revisions, "save_revision_approved",
+                          side_effect=AssertionError("unexpected save")):
+            output = targeted.generate_targeted_with_one_retry(
+                self.base, "Update helpers.py so answer returns 42",
+                model="qwen3:4b", cancel=token, ask=ask)
+        self.assertIsNone(output)
+        self.assertEqual(calls, [1])
+
+    def test_targeted_failing_model_does_not_retry_connection_errors(self):
+        calls = []
+        def ask(*args, **kwargs):
+            calls.append(1)
+            raise ConnectionError("Ollama went offline")
+        with self.assertRaises(ConnectionError):
+            targeted.generate_targeted_with_one_retry(
+                self.base, "Update helpers.py so answer returns 42",
+                model="qwen3:4b", cancel=threading.Event(), ask=ask)
+        self.assertEqual(calls, [1])
+
+    def test_targeted_two_invalid_attempts_never_save(self):
+        calls = []
+        def ask(*args, **kwargs):
+            calls.append(1)
+            return '{"changes":{"main.py":"pass"}}'
+        with patch.object(revisions, "save_revision_approved",
+                          side_effect=AssertionError("unexpected save")):
+            with self.assertRaisesRegex(projects.ProjectError, "after two attempts"):
+                targeted.generate_targeted_with_one_retry(
+                    self.base, "Update helpers.py so answer returns 42",
+                    model="qwen3:4b", cancel=threading.Event(), ask=ask)
+        self.assertEqual(len(calls), 2)
 
     def test_select_and_merge_only_relevant_files(self):
         context = targeted.select_context(
