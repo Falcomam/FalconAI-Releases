@@ -127,10 +127,13 @@ jobs:
           $report=Get-ChildItem $folder -Filter 'check_*.json' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $report) { throw 'Frozen EXE did not save the local diagnostics report' }
           $data=Get-Content -LiteralPath $report.FullName -Raw | ConvertFrom-Json
-          if ($data.checks.PSObject.Properties.Count -ne 13) {
-            throw 'Frozen self-check expected exactly 13 checks'
+          $checks=@($data.checks.PSObject.Properties)
+          Write-Host ('Frozen self-check count: ' + $checks.Count +
+                      '; keys: ' + (($checks | ForEach-Object { $_.Name }) -join ', '))
+          if ($checks.Count -ne 13) {
+            throw ('Frozen self-check expected exactly 13 checks; got ' + $checks.Count)
           }
-          foreach ($check in $data.checks.PSObject.Properties) {
+          foreach ($check in $checks) {
             if ($check.Value -ne 'present') {
               throw ('Failed frozen module/installer check: ' + $check.Name + ': ' + $check.Value)
             }
