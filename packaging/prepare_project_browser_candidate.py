@@ -129,12 +129,14 @@ change_once("developer_chat.py",
             return
 ''')
 change_once("developer_chat.py",
-            '''        elif action == "project_reject":
-            self.pending = None
+            '''            else:
+                self.pending = None
+                self.say("Project proposal rejected. No files were written.")
 ''',
-            '''        elif action == "project_reject":
-            self.pending = None
-            self.opened = None
+            '''            else:
+                self.pending = None
+                self.opened = None
+                self.say("Project proposal rejected. No files were written.")
 ''')
 change_once("developer_chat.py",
             '''    def _rollback(self, name, backup_id):
