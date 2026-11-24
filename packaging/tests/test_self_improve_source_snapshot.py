@@ -27,6 +27,24 @@ class SourceSnapshotTests(unittest.TestCase):
                                             "after": "def speed():\n    return 2\n"}}
         self.assertTrue(bridge.prepare(changes, snapshot)["fingerprint"])
 
+    def test_end_to_end_review_and_recheck_detects_source_edit(self):
+        changes = {"packaging/engine.py": {
+            "before": "def speed():\\n    return 1\\n",
+            "after": "def speed():\\n    return 2\\n",
+        }}
+        reviewed = bridge.prepare_from_checkout(changes, trusted_checkout=self.root)
+        verified = bridge.verify_from_checkout(
+            changes, trusted_checkout=self.root,
+            reviewed_fingerprint=reviewed["fingerprint"])
+        self.assertTrue(verified["source_snapshot_verified"])
+        self.assertFalse(verified["installation_allowed"])
+        (self.root / "packaging" / "engine.py").write_text(
+            "def speed():\\n    return 10\\n", encoding="utf-8")
+        with self.assertRaisesRegex(proposals.ProposalError, "Stale or fabricated"):
+            bridge.verify_from_checkout(
+                changes, trusted_checkout=self.root,
+                reviewed_fingerprint=reviewed["fingerprint"])
+
     def test_unknown_checkout_without_marker_rejected(self):
         (self.root / snapshots.MARKER).unlink()
         with self.assertRaises(proposals.ProposalError):
