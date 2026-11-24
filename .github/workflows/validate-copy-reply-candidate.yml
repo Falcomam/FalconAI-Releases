@@ -1,0 +1,64 @@
+name: Validate Falcon Ai per-reply copy candidate (no release)
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packaging/message_copy.py"
+      - "packaging/prepare_copy_reply_candidate.py"
+      - "packaging/tests/test_message_copy.py"
+      - ".github/workflows/validate-copy-reply-candidate.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-copy-and-stage:
+    runs-on: windows-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test exact copy payload and controls
+        shell: pwsh
+        run: |
+          python -m unittest discover -s packaging/tests -p test_message_copy.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'Per-reply clipboard tests failed' }
+      - name: Reconstruct prior source and stage next bundled candidate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python -m pip install "Pillow>=11.0"
+          if ($LASTEXITCODE -ne 0) { throw 'Pillow install failed' }
+          foreach ($patch in @('v13.6','v13.6.1','v13.6.2','v13.6.3','v13.6.4','v13.6.5')) {
+            python "patches/$patch/apply.py"
+            if ($LASTEXITCODE -ne 0) { throw "Base $patch failed" }
+          }
+          foreach ($script in @(
+            'packaging/prepare.py','packaging/prepare_icon_release.py',
+            'packaging/prepare_engine_candidate.py',
+            'packaging/prepare_single_chat_candidate.py',
+            'packaging/prepare_v138_release.py',
+            'packaging/prepare_copy_reply_candidate.py')) {
+            python $script
+            if ($LASTEXITCODE -ne 0) { throw "Staging failed: $script" }
+          }
+          python -m compileall -q build/Falcon_Ai_CopyReply_Candidate
+          if ($LASTEXITCODE -ne 0) { throw 'Copy-reply candidate syntax invalid' }
+          @'
+          from pathlib import Path
+          original=Path('build/Falcon_Ai_App_V13_8_0')
+          candidate=Path('build/Falcon_Ai_CopyReply_Candidate')
+          gui=(candidate/'falcon.py').read_text(encoding='utf-8')
+          assert (original/'RELEASE_VERSION.txt').read_text().strip()=='13.8.0'
+          assert (candidate/'RELEASE_VERSION.txt').read_text().strip()=='13.8.0'
+          assert 'message_copy.attach_copy_reply(' in gui
+          assert "if role == 'falcon':" in gui
+          assert 'on_error=lambda err:' in gui
+          assert "self.dev_chat.dispatch(prompt)" in gui
+          assert "self.dev_chat.stop()" in gui
+          assert 'message_copy.attach_copy_reply(' not in (original/'falcon.py').read_text(encoding='utf-8')
+          assert (candidate/'message_copy.py').is_file()
+          print('PASS: only Falcon responses have a copy link; previous released app unchanged')
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw 'Single chat regression check failed' }
