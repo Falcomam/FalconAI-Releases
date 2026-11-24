@@ -33,8 +33,9 @@ def find_source(name, needle, expected_fingerprint, *,
         raise projects.ProjectError("Saved project changed since it was opened. Use /project open again.")
     query = needle.strip().casefold()
     results = []
+    # Stable on-disk path order, with README.md before lowercase source files.
     for path, contents in sorted(snapshot["plan"]["files"].items(),
-                                 key=lambda item: item[0].casefold()):
+                                 key=lambda item: item[0]):
         for line_number, line in enumerate(contents.splitlines(), 1):
             if query not in line.casefold():
                 continue
