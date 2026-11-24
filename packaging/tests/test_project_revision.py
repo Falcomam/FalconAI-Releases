@@ -120,6 +120,21 @@ class ProjectRevisionTests(unittest.TestCase):
         self.assertEqual((self.workspace / "myapp" / "main.py").read_text(),
                          "print('my edit')\n")
 
+    def test_rollback_refuses_corrupted_backup_before_any_writes(self):
+        base = edits.load_project("myapp", workspace=self.workspace)
+        rev = self.modified()
+        approved = edits.review_revision(base, rev)["new_fingerprint"]
+        result = edits.save_revision_approved(base, rev, approved,
+                                              workspace=self.workspace)
+        backup_file = (self.workspace / edits.BACKUPS_FOLDER /
+                       "myapp" / result["backup_id"] / "main.py")
+        backup_file.write_text("print('corrupt backup')\n")
+        current = self.workspace / "myapp" / "main.py"
+        with self.assertRaisesRegex(dev.ProjectError, "integrity"):
+            edits.rollback_revision("myapp", result["backup_id"],
+                                    workspace=self.workspace)
+        self.assertEqual(current.read_text(), "print('new')\n")
+
     def test_rollback_id_path_injection_fails(self):
         for value in ("../", "a" * 40, ".." + "a" * 30, "A" * 32):
             with self.subTest(value=value), self.assertRaises(dev.ProjectError):
