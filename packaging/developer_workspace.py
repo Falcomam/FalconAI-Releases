@@ -76,13 +76,38 @@ def _check_path(path):
 
 
 def parse_proposal(raw):
-    """Parse an Ollama JSON response as inert data, never a command."""
+    """Parse one bounded JSON object, optionally inside one exact JSON fence.
+
+    Model formatting recovery is narrow: no commentary, appended objects,
+    ambiguous duplicate keys, NaN or executable code can be accepted.
+    """
     if not isinstance(raw, str) or len(raw.encode("utf-8")) > MAX_RAW_PROPOSAL:
         raise ProjectError("Project proposal must be a bounded JSON document")
+    payload = raw.strip()
+    if payload.startswith("```"):
+        match = re.fullmatch(
+            r"```(?:json)?[ \\t]*\\r?\\n(?P<body>.*?)\\r?\\n```",
+            payload, flags=re.I | re.S)
+        if not match:
+            raise ProjectError("Only one complete JSON code fence is supported")
+        payload = match.group("body")
+
+    def unique_pairs(pairs):
+        data = {}
+        for key, value in pairs:
+            if key in data:
+                raise ValueError("Duplicate JSON key")
+            data[key] = value
+        return data
+
+    def reject_constant(value):
+        raise ValueError("Non-standard JSON constant: " + value)
+
     try:
-        plan = json.loads(raw)
+        plan = json.loads(payload, object_pairs_hook=unique_pairs,
+                          parse_constant=reject_constant)
     except (TypeError, ValueError) as exc:
-        raise ProjectError("The coding model must return a JSON project object") from exc
+        raise ProjectError("The coding model must return one unambiguous JSON project") from exc
     return review_proposal(plan)
 
 
