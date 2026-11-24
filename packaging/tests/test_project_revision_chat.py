@@ -94,6 +94,38 @@ class InChatRevisionTests(unittest.TestCase):
         self.assertIn("Old", saved.read_text())
         self.assertIn("No generated code was executed.", self.app.messages[-1][1])
 
+    def test_chat_can_add_new_source_file_with_review_and_rollback(self):
+        proposed = {"name": self.new["name"], "kind": self.new["kind"],
+                    "files": dict(self.base["files"])}
+        proposed["files"]["assets/theme.css"] = "body { color: purple; }\n"
+        controls = self.generation_context(proposed)
+        with controls[0], controls[1], controls[2], controls[3], controls[4]:
+            self.chat.dispatch("/project edit falcon_site add a purple stylesheet")
+        self.assertEqual(self.chat.pending["mode"], "edit")
+        self.assertEqual(self.chat.pending["revision"]["added"], ("assets/theme.css",))
+        target = self.root / "falcon_site/assets/theme.css"
+        self.assertFalse(target.exists())
+        self.chat.dispatch("/project approve")
+        self.assertIn("Review the proposed files first", self.app.messages[-1][1])
+        self.chat.dispatch("/project diff")
+        self.assertIn("/dev/null", self.app.messages[-1][1])
+        self.assertIn("assets/theme.css", self.app.messages[-1][1])
+        with patch.object(edits, "save_revision_approved",
+                          side_effect=lambda base, plan, fp:
+                          _save_actual(base, plan, fp, self.root)):
+            self.chat.dispatch("/project approve")
+        self.assertIsNone(self.chat.pending)
+        self.assertEqual(target.read_text(), "body { color: purple; }\n")
+        self.assertIn("Backup ID:", self.app.messages[-1][1])
+        backup_id = self.app.messages[-1][1].split("Backup ID: ")[1].splitlines()[0]
+        with patch.object(edits, "rollback_revision",
+                          side_effect=lambda name, backup:
+                          _restore_actual(name, backup, self.root)):
+            self.chat.dispatch("/project rollback falcon_site " + backup_id)
+        self.assertFalse(target.exists())
+        self.assertFalse(target.parent.exists())
+        self.assertIn("Old", (self.root / "falcon_site/index.html").read_text())
+
     def test_edit_rejects_changed_original_files(self):
         controls = self.generation_context(self.new)
         with controls[0], controls[1], controls[2], controls[3], controls[4]:
