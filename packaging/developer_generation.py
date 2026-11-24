@@ -5,12 +5,15 @@ downloaded or saved. STOP cancellation is checked around each model request.
 """
 from __future__ import annotations
 
+import time
+
 import developer_workspace as projects
 
 MAX_ATTEMPTS = 2
 
 
-def generate_with_one_retry(*, kind, messages, model, cancel, ask):
+def generate_with_one_retry(*, kind, messages, model, cancel, ask,
+                            token_limit=4600, total_timeout=180):
     if kind not in projects.ALLOWED_KINDS:
         raise projects.ProjectError("Unsupported generated project type")
     if not isinstance(messages, list) or len(messages) < 2:
@@ -18,10 +21,18 @@ def generate_with_one_retry(*, kind, messages, model, cancel, ask):
     if not callable(ask):
         raise projects.ProjectError("Local coding model unavailable")
 
+    if not isinstance(token_limit, int) or not 1000 <= token_limit <= 10000:
+        raise projects.ProjectError("Unsafe coding model output limit")
+    if not isinstance(total_timeout, (int, float)) or not 10 <= total_timeout <= 300:
+        raise projects.ProjectError("Unsafe coding model time budget")
+    deadline = time.monotonic() + total_timeout
     last_error = None
     for attempt in range(MAX_ATTEMPTS):
         if cancel.is_set():
             return None
+        remaining = deadline - time.monotonic()
+        if remaining < 5:
+            raise projects.ProjectError("Local coding model time budget exhausted")
         prompts = list(messages)
         if attempt:
             prompts.append({
@@ -35,7 +46,7 @@ def generate_with_one_retry(*, kind, messages, model, cancel, ask):
                 ),
             })
         raw = ask(prompts, model=model, fmt="json",
-                  limit=4600, timeout=180, cancel=cancel)
+                  limit=token_limit, timeout=min(180, remaining), cancel=cancel)
         if cancel.is_set():
             return None
         try:
