@@ -60,6 +60,20 @@ class SelfImproveProposalTests(unittest.TestCase):
                             for item in risks["indicators"]))
         self.assertFalse(result["installation_allowed"])
 
+    def test_repair_invalid_original_python_json_and_toml(self):
+        repairs = (
+            ("broken.py", "def broken(:\n", "def fixed():\n    return 1\n"),
+            ("broken.json", '{"number":', '{"number": 1}'),
+            ("broken.toml", "x = [", "x = [1]\n"),
+        )
+        for path, original, replacement in repairs:
+            with self.subTest(path=path):
+                result = sip.review({path: {"before": original, "after": replacement}})
+                self.assertEqual(result["file_count"], 1)
+                self.assertFalse(result["installation_allowed"])
+        with self.assertRaisesRegex(sip.ProposalError, "Python syntax error"):
+            sip.review({"x.py": {"before": "def broken(:", "after": "def still_broken(:"}})
+
     def test_toml_and_line_count_validation(self):
         before = 'enabled = true\n'
         after = 'enabled = false\nextra = 2\n'
