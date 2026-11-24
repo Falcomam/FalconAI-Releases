@@ -155,6 +155,16 @@ one("falcon.py", "        self.set_status('Error • Ready')",
 one("falcon.py", "        self.set_status('Ready • Local Ollama')",
     "        self.set_status('Ready • ' + MODEL)")
 
+# Use the selected model in the consent-gated PC task planner as well.
+# Python binds default argument objects at function definition time, so
+# a mutable CHAT_MODEL variable alone would not update ask_ollama defaults.
+one("agent.py",
+    "def ask_ollama(messages, *, model=CHAT_MODEL, fmt='json', limit=1200, timeout=180, cancel=None):\n    check_stop(cancel)",
+    """def ask_ollama(messages, *, model=None, fmt='json', limit=1200, timeout=180, cancel=None):
+    check_stop(cancel)
+    if model is None:
+        model = os.getenv('FALCON_CHAT_MODEL', CHAT_MODEL)""")
+
 # Frozen entry point must load saved selection before importing agent.
 app_entry = RUNTIME / "app_entry.py"
 app_text = app_entry.read_text(encoding="utf-8")
