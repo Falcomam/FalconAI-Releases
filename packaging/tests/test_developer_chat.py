@@ -169,6 +169,28 @@ class DeveloperChatTests(unittest.TestCase):
             save.assert_called_once_with("llama3.2:3b", installed_models=installed["models"])
         self.assertIn("PC approval and STOP permissions", self.app.messages[-1][1])
 
+    def test_failed_replacement_preserves_reviewed_draft(self):
+        old = project()
+        review = workspace.review_proposal(old)
+        self.chat.pending = {"plan": old, "review": review, "reviewed": True}
+        def fails(label, function, complete):
+            with self.assertRaises(RuntimeError):
+                function(threading.Event())
+        with patch.object(self.chat, "_launch", side_effect=fails), \
+             patch.object(dev.engine_manager, "probe",
+                          return_value={"online": False, "models": ()}):
+            self.chat.dispatch("/project python make a different Python utility")
+        self.assertEqual(self.chat.pending["review"]["fingerprint"], review["fingerprint"])
+        self.assertTrue(self.chat.pending["reviewed"])
+
+    def test_reject_while_generating_prompts_to_stop(self):
+        p = project()
+        self.chat.pending = {"plan": p, "review": workspace.review_proposal(p)}
+        self.chat._running = True
+        self.chat.dispatch("/project reject")
+        self.assertIsNotNone(self.chat.pending)
+        self.assertIn("Press STOP", self.app.messages[-1][1])
+
     def test_concurrent_generation_cannot_discard_pending_review(self):
         p = project()
         info = workspace.review_proposal(p)
