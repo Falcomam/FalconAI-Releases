@@ -9,6 +9,9 @@ on:
       - "packaging/project_static_check.py"
       - "packaging/project_targeted_edits.py"
       - "packaging/engine_manager.py"
+      - "packaging/gaming_mode.py"
+      - "packaging/tests/test_gaming_mode.py"
+      - "packaging/prepare_single_chat_candidate.py"
       - "packaging/self_improve_*.py"
       - "packaging/tests/test_developer_workspace.py"
       - "packaging/tests/test_developer_chat.py"
@@ -57,7 +60,8 @@ jobs:
                         Path("packaging/tests/test_developer_generation.py"),
                         Path("packaging/tests/test_project_static_check.py"),
                         Path("packaging/tests/test_project_targeted_edits.py"),
-                        Path("packaging/tests/test_engine_manager.py")])
+                        Path("packaging/tests/test_engine_manager.py"),
+                        Path("packaging/tests/test_gaming_mode.py")])
           if len(tests) < 13:
               raise SystemExit("Missing required self-improvement test files")
           for path in tests:
