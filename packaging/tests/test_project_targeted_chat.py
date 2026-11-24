@@ -114,6 +114,30 @@ class TargetedChatTests(unittest.TestCase):
         self.assertEqual((self.workspace/"falcon_target"/"helpers.py").read_text(),
                          "def answer():\n    return 1\n")
 
+    def test_oversized_revision_diff_does_not_unlock_approval(self):
+        snapshot = {"plan": self.plan,
+                    "fingerprint": revisions._snapshot_fingerprint(self.plan)}
+        replacement = {
+            "name": self.plan["name"], "kind": "python",
+            "files": dict(self.plan["files"]),
+        }
+        replacement["files"]["helpers.py"] = "huge = '" + "Z" * 28000 + "'\n"
+        revision = revisions.review_revision(snapshot, replacement)
+        self.chat.pending = {
+            "mode": "edit", "plan": replacement, "base": snapshot,
+            "review": projects.review_proposal(replacement),
+            "revision": revision, "reviewed": False,
+        }
+        self.chat.dispatch("/project diff")
+        self.assertFalse(self.chat.pending["reviewed"])
+        self.assertIn("Approval BLOCKED", self.app.messages[-1][1])
+        with patch.object(revisions, "save_revision_approved",
+                          side_effect=AssertionError("unreviewed save forbidden")):
+            self.chat.dispatch("/project approve")
+        self.assertIn("Review the proposed files first", self.app.messages[-1][1])
+        self.assertEqual((self.workspace/"falcon_target"/"helpers.py").read_text(),
+                         "def answer():\n    return 1\n")
+
     def test_missing_model_prevents_write(self):
         initial = (self.workspace/"falcon_target"/"helpers.py").read_bytes()
         original_loader = revisions.load_project
