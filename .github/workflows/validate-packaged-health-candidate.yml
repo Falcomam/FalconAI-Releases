@@ -5,6 +5,7 @@ on:
     paths:
       - "packaging/packaged_diagnostics.py"
       - "packaging/prepare_packaged_health_candidate.py"
+      - "packaging/finalize_packaged_health_release.py"
       - "packaging/tests/test_packaged_diagnostics.py"
       - "packaging/tests/test_packaged_improve_guard.py"
       - ".github/workflows/validate-packaged-health-candidate.yml"
@@ -51,6 +52,8 @@ jobs:
             python $script
             if ($LASTEXITCODE -ne 0) { throw "Source stage failed: $script" }
           }
+          python packaging/finalize_packaged_health_release.py
+          if ($LASTEXITCODE -ne 0) { throw '13.9.1 candidate finalization failed' }
           python -m compileall -q build/Falcon_Ai_Health_Candidate
           if ($LASTEXITCODE -ne 0) { throw 'Health candidate Python syntax failure' }
           python -m py_compile build/falcon_app_health_runtime/app_entry.py
@@ -77,7 +80,10 @@ jobs:
           improve=(target/"improve_cycle.py").read_text(encoding="utf-8")
           upgrade=(target/"core_upgrade.py").read_text(encoding="utf-8")
           entry=(runtime/"app_entry.py").read_text(encoding="utf-8")
-          assert (target/"RELEASE_VERSION.txt").read_text().strip()=="13.9.0"
+          assert (target/"RELEASE_VERSION.txt").read_text().strip()=="13.9.1"
+          assert "CURRENT_VERSION = (13, 9, 1)" in (runtime/"app_updates.py").read_text()
+          assert "CURRENT_VERSION != (13, 9, 1)" in entry
+          assert '#define MyAppVersion "13.9.1"' in (runtime/"Falcon_Ai.iss").read_text()
           assert "sys.modules['diagnostics'] = packaged_diagnostics" in entry
           assert "--falcon-diagnostics-self-test" in entry
           assert "source-file Docker Improve feature" in improve
