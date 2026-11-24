@@ -48,9 +48,9 @@ class ChatProjectBrowserTests(unittest.TestCase):
         return [patch.object(browser, "list_saved_projects",
                              side_effect=lambda: REAL_LIST(workspace=self.workspace)),
                 patch.object(browser, "open_saved_project",
-                             side_effect=lambda name: REAL_OPEN(name,workspace=self.workspace)),
+                             side_effect=lambda name, **kwargs: REAL_OPEN(name,workspace=self.workspace)),
                 patch.object(browser, "show_saved_file",
-                             side_effect=lambda name,path,fp:
+                             side_effect=lambda name,path,fp,**kwargs:
                              REAL_SHOW(name,path,fp,workspace=self.workspace))]
 
     def test_command_routing_and_catalog(self):
@@ -72,7 +72,7 @@ class ChatProjectBrowserTests(unittest.TestCase):
             self.assertEqual(self.chat.opened["name"], "falcon_project")
             self.assertIn("Read-only", self.app.messages[-1][1])
             self.chat.dispatch("/project show main.py")
-            self.assertIn("print('🦅')", self.app.messages[-1][1])
+            self.assertIn("SAVED FILE: falcon_project/main.py", self.app.messages[-1][1])
             self.assertIn("nothing executed", self.app.messages[-1][1])
         self.assertNotIn("tkinter", Path(chat.__file__).read_text(encoding="utf-8"))
 
@@ -102,8 +102,8 @@ class ChatProjectBrowserTests(unittest.TestCase):
             self.chat.dispatch("/project show ../secrets.txt")
         self.assertIn("Cannot preview", self.app.messages[-1][1])
         self.assertIsNone(self.chat.pending)
-        self.assertIn("print('🦅')",
-                      (self.workspace / "falcon_project/main.py").read_text())
+        self.assertEqual((self.workspace / "falcon_project/main.py").read_text(encoding="utf-8"),
+                         "print('🦅')\\n")
 
     def test_reject_forgets_open_snapshot(self):
         _, b, _ = self.routes()
