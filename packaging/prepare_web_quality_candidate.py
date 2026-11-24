@@ -26,35 +26,45 @@ def replace_once(path, old, new):
     file.write_text(data.replace(old, new, 1), encoding="utf-8")
 
 
-replace_once("developer_workspace.py",
-             "import stat\n",
-             "import stat\nimport html_quality\n")
-replace_once("developer_workspace.py",
-             "        clean[path] = contents\n    canonical = json.dumps(",
-             """        clean[path] = contents
-    # Check browser markup WITHOUT running HTML, CSS or JavaScript. Generated
-    # website source must pass this gate before the user can review/save it.
+# The base v13.8 staging script may already use the latest packaged
+# developer_workspace.py and developer_chat.py sources. Do not double-patch
+# a module that has already been updated on main by another development sprint.
+workspace = (TARGET / "developer_workspace.py").read_text(encoding="utf-8")
+if "import html_quality" not in workspace:
+    replace_once("developer_workspace.py", "import stat\n",
+                 "import stat\nimport html_quality\n")
+    workspace = (TARGET / "developer_workspace.py").read_text(encoding="utf-8")
+if "quality_warnings" not in workspace:
+    replace_once("developer_workspace.py",
+                 "        clean[path] = contents\n    canonical = json.dumps(",
+                 """        clean[path] = contents
     quality_warnings = ()
     if kind == "website":
         try:
             quality_warnings = tuple(html_quality.check_website(clean))
         except html_quality.WebsiteQualityError as exc:
-            raise ProjectError("Website quality check failed: " + str(exc)) from exc
+            raise ProjectError("Website HTML validation failed: " + str(exc)) from exc
     canonical = json.dumps(""")
-replace_once("developer_workspace.py",
-             '        "execution_allowed": False,\n',
-             '        "execution_allowed": False,\n'
-             '        "quality_warnings": quality_warnings,\n')
-replace_once("developer_chat.py",
-             '    "Minecraft Fabric projects are uncompiled starters, not working built mods. "\n',
-             '    "For websites, include index.html with complete html, head, title and body tags, "\n'
-             '    \'a complete <meta charset="UTF-8"> element, and working HTML structure. \'\n'
-             '    "Every internal navigation href beginning with # must match an actual element id. "\n'
-             '    "Do not invent real subscriptions: a subscribe button needs a real user-supplied "\n'
-             '    "destination URL or must be clearly labeled as a demo button. "\n'
-             '    "Do not include broken links, incomplete tags or placeholder content masquerading "\n'
-             '    "as functional features. "\n'
-             '    "Minecraft Fabric projects are uncompiled starters, not working built mods. "\n')
+    replace_once("developer_workspace.py",
+                 '        "execution_allowed": False,\n',
+                 '        "execution_allowed": False,\n'
+                 '        "quality_warnings": quality_warnings,\n')
+chat = (TARGET / "developer_chat.py").read_text(encoding="utf-8")
+if "For website projects, always include index.html" not in chat:
+    replace_once("developer_chat.py",
+                 '    "Minecraft Fabric projects are uncompiled starters, not working built mods. "\n',
+                 '    "For website projects, always include index.html with complete HTML, "\n'
+                 '    "a valid UTF-8 meta charset, correct links and no fake functionality. "\n'
+                 '    "Minecraft Fabric projects are uncompiled starters, not working built mods. "\n')
+# Always require the actual integration outcome; neither a skip nor a partial
+# patch should allow invalid website source to be offered to the user.
+workspace = (TARGET / "developer_workspace.py").read_text(encoding="utf-8")
+chat = (TARGET / "developer_chat.py").read_text(encoding="utf-8")
+assert "import html_quality" in workspace
+assert "quality_warnings" in workspace
+assert "check_website(clean)" in workspace
+assert "website projects" in chat or "For websites" in chat
+
 (TARGET / "WEB_QUALITY_CANDIDATE_ONLY.txt").write_text(
     "Conservative static website checking and quality-oriented prompts. "
     "No code execution and no released installer. Bundle after native Windows "
