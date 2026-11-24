@@ -92,6 +92,16 @@ class SourceSnapshotTests(unittest.TestCase):
         with self.assertRaises(proposals.ProposalError):
             snapshots.read_snapshot(self.root, ["redirect/engine.py"])
 
+    def test_redirecting_checkout_ancestor_rejected(self):
+        alias = Path(self.tmp.name) / "checkout_alias"
+        try:
+            alias.symlink_to(self.root, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("Directory symlinks unavailable")
+        indirect = alias / "packaging"
+        with self.assertRaises(proposals.ProposalError):
+            snapshots.read_snapshot(indirect.parent, ["packaging/engine.py"])
+
     def test_paths_limits_and_missing_file(self):
         for requested in (["../escape.py"], ["packaging/missing.py"],
                           ["packaging/engine.py", "PACKAGING/ENGINE.PY"],
