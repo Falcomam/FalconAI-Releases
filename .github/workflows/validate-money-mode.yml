@@ -1,0 +1,36 @@
+name: Validate Falcon Money Mode source
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packaging/money_mode.py"
+      - "packaging/tests/test_money_mode.py"
+      - "packaging/prepare_money_mode_candidate.py"
+      - ".github/workflows/validate-money-mode.yml"
+  pull_request:
+    paths:
+      - "packaging/money_mode.py"
+      - "packaging/tests/test_money_mode.py"
+      - "packaging/prepare_money_mode_candidate.py"
+      - ".github/workflows/validate-money-mode.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run Money Mode unit tests
+        shell: bash
+        run: |
+          python -m unittest discover -s packaging/tests -p test_money_mode.py -v
+          python -m compileall -q packaging/money_mode.py packaging/prepare_money_mode_candidate.py
