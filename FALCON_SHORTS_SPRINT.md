@@ -58,3 +58,9 @@ Current status: prompt changed from horror to original absurd comedy. Gradient b
 
 ## Owner UX update: startup report
 Show a read-only daily Shorts report automatically when the main chat initializes, and via /shorts status. Keep one application rather than introducing another window. Report local draft state, saved upload receipt (not live public visibility), STOP, gaming pause, missing media tools, proposed schedule, and next action. No AI work or upload is triggered by the report. Implemented in shorts_report.py and developer_chat.py; report regression tests and CI syntax coverage added. Still needs staged/frozen packaging and native startup verification; not installed yet. No claims of real-time YouTube analytics until authorized API data is available.
+
+
+## Follow-up: packaging Money Mode
+- 135da26 adds an explicit seven-module staging manifest and checks the staged chat integration before copying. 406fd4a calls it from the V14 foundation candidate reconstruction. 4ec0bbd adds five regression cases for successful/repeated staging, missing module, conflicting target, absent integration, and invalid source syntax.
+- Local isolated Python smoke test of the staging function using synthetic source/candidate directories passed all five cases. This was a manually reproduced function test, not an actual repository checkout, frozen Windows build or installer check.
+- Existing Money Mode menu offers report, generate, preview, daily draft opt-in and pause. Native startup/menu, full packaging path and actual owner PC generation remain unverified. Do not claim a release or automated public publishing. The user wants an automatic startup report and no routine command typing.
