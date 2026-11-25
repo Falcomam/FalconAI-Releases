@@ -23,7 +23,9 @@ def report(root=ROOT, day=None, *, gaming=False):
     if ledger.exists():
         try:
             data=json.loads(ledger.read_text(encoding="utf-8"))
-            if data.get("state")=="uploaded" and data.get("video_id"):
+            if data.get("state")=="manual_handoff":
+                upload="Manual Studio handoff recorded; upload not verified"
+            elif data.get("state")=="uploaded" and data.get("video_id"):
                 upload="Upload receipt saved; public visibility not verified"
             else:
                 upload="Upload uncertain; check YouTube Studio before retrying"
