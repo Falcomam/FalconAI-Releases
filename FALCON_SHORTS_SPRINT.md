@@ -21,3 +21,12 @@ An original surreal comedy series: fictional object-animal hybrids, rapid escala
 6. Mock API tests and real authorized test upload before declaring posting operational. Follow AGENTS.md Windows frozen app, clean install, upgrade/relaunch, data preservation and SHA-256 release gates. Never publish a source-only commit as a verified Windows installer.
 
 Current status: prompt changed from horror to original absurd comedy. Gradient backgrounds and local speech only; full scene rendering, scheduling and uploader are not implemented or tested. No video uploaded and no Windows release yet.
+
+
+## Follow-up sprint: scene timing
+- Source commits: edd8c5a (timing and duplicate detection), f061fbc (six separate narrated scenes and burned-in captions), 94859b5 (unit tests), d9aed1a (Windows/Linux source CI).
+- A local Linux FFmpeg smoke test rendered a single 720x1280 gradient scene with a synthetic sine-wave audio track, then concatenated and burned SRT subtitles. ffprobe reported video plus audio, 720x1280, 2.24 seconds. This is not a full six-scene run, Windows speech test, CI result, or actual AI-character video.
+- Remaining: run source CI, test six-scene media, add consistent original character visuals using locally licensed models, add quality gate and daily scheduler, then official authorized channel upload.
+- Current research: https://www.youtube.com/watch?v=0mT4p86ZxGQ describes a shot-by-shot local ComfyUI workflow using LTX and Flux; description only, no complete transcript obtained. Benchmark VRAM before choosing a model.
+- Official current upload documentation: https://developers.google.com/youtube/data/guides/uploading_a_video and https://developers.google.com/youtube/data/reference/rest/v3/videos/insert describe authorized upload. Reconcile current API policy and required minimum functionality before release. https://support.google.com/youtube/answer/1311392 and https://support.google.com/youtube/answer/2801973 reinforce originality and anti-spam; don't assume AI-generated daily posts qualify for monetization.
+- No live uploads or new installer in this sprint.
