@@ -3,6 +3,7 @@ Run with Python 3.10+, Ollama, Windows PowerShell, and FFmpeg on PATH.
 No credentials or generated code are executed. Procedural cartoons are original artwork, not generative AI video. Pillow is required.
 """
 import argparse
+from contextvars import ContextVar
 import datetime as dt
 import json
 import os
@@ -19,6 +20,7 @@ from shorts_visuals import render_scene, SETTINGS, ACTIONS
 
 ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "FalconAI"
 OUT = ROOT / "shorts"
+_CANCEL = ContextVar("shorts_cancel", default=None)
 
 def paused():
     try:
@@ -29,7 +31,8 @@ def paused():
         return True
 
 def check_pause():
-    if paused() or (OUT / "STOP").exists():
+    cancel = _CANCEL.get()
+    if (cancel is not None and cancel.is_set()) or paused() or (OUT / "STOP").exists():
         raise RuntimeError("Shorts paused by Gaming Mode or STOP")
 
 def script(model):
@@ -105,7 +108,15 @@ def render_video(folder, story, key, frames):
         raise ValueError("Rendered duration differs from narration timeline")
     return duration
 
-def create(model, day=None):
+def create(model, day=None, *, cancel=None):
+    """Run in an existing app worker; cancellation is scoped to that worker."""
+    token = _CANCEL.set(cancel)
+    try:
+        return _create(model, day)
+    finally:
+        _CANCEL.reset(token)
+
+def _create(model, day=None):
     check_pause()
     preflight()
     OUT.mkdir(parents=True,exist_ok=True)
@@ -114,6 +125,7 @@ def create(model, day=None):
     folder.mkdir(exist_ok=False)
     try:
         story=script(model)
+        check_pause()
         key = distinct_story(story, OUT, folder)
         (folder/"story.json").write_text(json.dumps(story,indent=2),encoding="utf-8")
         # One actual speech recording per scene, not guessed timing.
