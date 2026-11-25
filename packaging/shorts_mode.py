@@ -11,6 +11,8 @@ import re
 import subprocess
 import urllib.request
 import time
+import shutil
+from shorts_upload import probe
 from shorts_schedule import due
 from shorts_timing import distinct_story, scene_frames, timeline, FPS
 from shorts_visuals import render_scene, SETTINGS, ACTIONS
@@ -74,8 +76,38 @@ def run(cmd, cwd):
                 try: p.wait(timeout=5)
                 except subprocess.TimeoutExpired: p.kill(); p.wait()
 
+def preflight():
+    missing = [name for name in ("ffmpeg", "ffprobe", "powershell.exe") if not shutil.which(name)]
+    if missing:
+        raise RuntimeError("Required tools not found on PATH: " + ", ".join(missing))
+
+def render_video(folder, story, key, frames):
+    """Render existing six voice WAV files; reusable by offline integration tests."""
+    (folder/"captions.srt").write_text(timeline(story["lines"],frames),encoding="utf-8")
+    for i, count in enumerate(frames):
+        check_pause()
+        scene = story["scenes"][i]
+        render_scene(key,i,scene["setting"],scene["action"],folder/f"art{i}.png")
+        run(["ffmpeg","-nostdin","-y","-loop","1","-framerate",str(FPS),"-i",f"art{i}.png",
+             "-i",f"voice{i}.wav","-map","0:v","-map","1:a",
+             "-vf","scale=1440:2560,zoompan=z=1.04+0.0004*on:x=iw/2-iw/zoom/2:y=ih/2-ih/zoom/2:d=1:s=720x1280:fps=30",
+             "-af","apad","-t",f"{count/FPS:.6f}","-c:v","libx264",
+             "-preset","veryfast","-pix_fmt","yuv420p","-c:a","aac",
+             "-ar","48000","-ac","1",f"scene{i}.mp4"],folder)
+    (folder/"segments.txt").write_text("".join(f"file scene{i}.mp4\n" for i in range(6)),encoding="ascii")
+    run(["ffmpeg","-nostdin","-y","-f","concat","-safe","1","-i","segments.txt",
+         "-vf","subtitles=captions.srt:force_style='FontSize=20,Alignment=2,MarginV=100'",
+         "-c:v","libx264","-preset","veryfast","-pix_fmt","yuv420p",
+         "-c:a","aac","-movflags","+faststart","draft.mp4"],folder)
+    check_pause()
+    duration = probe(folder/"draft.mp4")
+    if abs(duration-sum(frames)/FPS)>1:
+        raise ValueError("Rendered duration differs from narration timeline")
+    return duration
+
 def create(model, day=None):
     check_pause()
+    preflight()
     OUT.mkdir(parents=True,exist_ok=True)
     folder=OUT/(day or dt.date.today()).isoformat()
     # Atomic directory reservation prevents concurrent duplicate drafts.
@@ -100,22 +132,7 @@ $s.Dispose()
             voice = folder / f"voice{i}.wav"
             (folder/"voice.wav").replace(voice)
             frames.append(scene_frames(voice))
-        (folder/"captions.srt").write_text(timeline(story["lines"],frames),encoding="utf-8")
-        for i, count in enumerate(frames):
-            check_pause()
-            scene = story["scenes"][i]
-            render_scene(key,i,scene["setting"],scene["action"],folder/f"art{i}.png")
-            run(["ffmpeg","-nostdin","-y","-loop","1","-framerate",str(FPS),"-i",f"art{i}.png",
-                 "-i",f"voice{i}.wav","-map","0:v","-map","1:a",
-                 "-vf","scale=1440:2560,zoompan=z=1.04+0.0004*on:x=iw/2-iw/zoom/2:y=ih/2-ih/zoom/2:d=1:s=720x1280:fps=30",
-                 "-af","apad","-t",f"{count/FPS:.6f}","-c:v","libx264",
-                 "-preset","veryfast","-pix_fmt","yuv420p","-c:a","aac",
-                 "-ar","48000","-ac","1",f"scene{i}.mp4"],folder)
-        (folder/"segments.txt").write_text("".join(f"file scene{i}.mp4\n" for i in range(6)),encoding="ascii")
-        run(["ffmpeg","-nostdin","-y","-f","concat","-safe","1","-i","segments.txt",
-             "-vf","subtitles=captions.srt:force_style='FontSize=20,Alignment=2,MarginV=100'",
-             "-c:v","libx264","-preset","veryfast","-pix_fmt","yuv420p",
-             "-c:a","aac","-movflags","+faststart","draft.mp4"],folder)
+        render_video(folder, story, key, frames)
         check_pause()
         (folder/"REVIEW_REQUIRED.txt").write_text("Private local draft. Review audio, duration, originality, imagery and disclosure before uploading. No upload performed.",encoding="utf-8")
         return folder
