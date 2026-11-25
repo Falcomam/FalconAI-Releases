@@ -4,9 +4,14 @@ on:
     branches: [main]
     paths:
       - "packaging/money_mode.py"
+      - "packaging/payhip_store.py"
+      - "packaging/website_preview.py"
+      - "packaging/prepare_v142_store_candidate.py"
       - "packaging/money_integrations.py"
       - "packaging/customer_faq.py"
       - "packaging/tests/test_money_mode.py"
+      - "packaging/tests/test_payhip_store.py"
+      - "packaging/tests/test_website_preview.py"
       - "packaging/tests/test_money_integrations.py"
       - "packaging/tests/test_customer_faq.py"
       - "packaging/tests/test_money_mode_chat.py"
@@ -16,8 +21,13 @@ on:
   pull_request:
     paths:
       - "packaging/money_mode.py"
+      - "packaging/payhip_store.py"
+      - "packaging/website_preview.py"
+      - "packaging/prepare_v142_store_candidate.py"
       - "packaging/money_integrations.py"
       - "packaging/tests/test_money_mode.py"
+      - "packaging/tests/test_payhip_store.py"
+      - "packaging/tests/test_website_preview.py"
       - "packaging/tests/test_money_integrations.py"
       - "packaging/tests/test_customer_faq.py"
       - "packaging/tests/test_money_mode_chat.py"
@@ -44,6 +54,8 @@ jobs:
         shell: bash
         run: |
           python -m unittest discover -s packaging/tests -p test_money_mode.py -v
+          python -m unittest discover -s packaging/tests -p test_payhip_store.py -v
+          python -m unittest discover -s packaging/tests -p test_website_preview.py -v
           python -m unittest discover -s packaging/tests -p test_money_integrations.py -v
           python -m unittest discover -s packaging/tests -p test_customer_faq.py -v
           python -m compileall -q packaging/money_mode.py packaging/money_integrations.py packaging/customer_faq.py packaging/prepare_money_mode_candidate.py
@@ -72,11 +84,23 @@ jobs:
             prepare_project_search_candidate.py prepare_quiet_powershell_candidate.py \
             prepare_packaged_health_candidate.py finalize_packaged_health_release.py \
             prepare_v14_release_candidate.py prepare_agent_coding_candidate.py \
-            prepare_money_mode_candidate.py; do
+            prepare_money_mode_candidate.py prepare_v141_money_release_candidate.py \
+            prepare_v142_store_candidate.py; do
             python "packaging/$script"
           done
       - name: Verify Money Mode live chat routing and review gate
         shell: bash
         run: |
           python -m unittest discover -s packaging/tests -p test_money_mode_chat.py -v
-          python -m compileall -q build/Falcon_Ai_MoneyMode_Candidate
+          python -m compileall -q build/Falcon_Ai_V14_2_Candidate
+          python - <<'PY'
+          import sys
+          from pathlib import Path
+          source=Path("build/Falcon_Ai_V14_2_Candidate").resolve()
+          sys.path.insert(0,str(source))
+          import developer_chat as d
+          assert d.route("/money payhip") == ("money_mode", "payhip")
+          assert d.route("/project preview example_site") == ("project_preview","example_site")
+          assert "payhip_store" in (source/"developer_chat.py").read_text(encoding="utf-8")
+          print("Payhip and auto-preview command routes verified")
+          PY
