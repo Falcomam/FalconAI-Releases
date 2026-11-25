@@ -1,6 +1,18 @@
 # Falcon Money Mode — Fiverr and customer automation product plan
 
-Date: 2026-11-24. Status: **roadmap only**. No customer-service or Fiverr integration has been released in the Windows app.
+Date: 2026-11-24. Status: **developer-source implementation begun; no installed Windows release**. The real Fiverr seller inbox/orders are NOT connected and external agent runtimes are NOT installed.
+
+## Implementation added to the development branch
+
+- `packaging/money_mode.py`: local order records, service checklists, explicit owner quotes, status tracking, seller reply drafts, record deletion, and private public-handle configuration. No third-party account credentials.
+- Same-chat `/money` command staging in `packaging/prepare_money_mode_candidate.py` with Commands menu entries.
+- Five **inert task handoff blueprints**: Agent Fiverr (order system ideas), HustleBot (proposal drafting ideas), OpenHands (developer worker), n8n and Activepieces (workflow blueprints). These are NOT the vendor's real runtimes or vendor-importable workflows. They are not network integrations.
+- `packaging/customer_faq.py`: a working, no-paid-API, client-fact-grounded **static FAQ webpage template** with human handoff, responsive styling and no conversation logging. `/money faq-demo` stages a fictional example as normal reviewed source, but this command exists only in the new development source candidate.
+- Unit tests on Windows/Linux in `validate-money-mode.yml` and a Windows staged chat integration job. CI existence does not establish a pass until actual GitHub Actions jobs succeed.
+- The owner can eventually configure the public seller handle with `/money seller <handle>`. This command does not sign in to Fiverr, grant access or scrape data. Passwords/session cookies must never be pasted into Falcon messages.
+
+**Implementation priority:** production-ready order handling and a tested FAQ demo first; followed by optional verified worker adapters and legitimate platform integrations. The user requested unattended end-to-end operation, but **it is not implemented**. Keep routine approved-scope file and browser steps low-friction without bypassing consent for security-sensitive actions.
+
 
 ## User goal
 
