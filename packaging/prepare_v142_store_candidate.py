@@ -26,7 +26,7 @@ for directory in (TARGET, RUNTIME):
 shutil.copytree(BASE, TARGET, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".venv"))
 shutil.copytree(BASE_RUNTIME, RUNTIME, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".venv"))
 
-for module in ("payhip_store.py", "website_preview.py"):
+for module in ("payhip_store.py", "website_preview.py", "payhip_browser_agent.py"):
     shutil.copy2(ROOT / "packaging" / module, TARGET / module)
 
 
@@ -41,7 +41,7 @@ def replace(file, before, after):
 
 chat = TARGET / "developer_chat.py"
 replace(chat, "import money_integrations\n",
-        "import money_integrations\nimport payhip_store\nimport website_preview\n")
+        "import money_integrations\nimport payhip_store\nimport website_preview\nimport payhip_browser_agent\n")
 replace(chat, "    match = _ENGINE.fullmatch(raw)\n",
         '''    browser_match = re.fullmatch(r"/project\\s+preview\\s+([A-Za-z0-9_-]+)\\s*", raw, re.I)
     if browser_match:
@@ -60,6 +60,25 @@ replace(chat, '''        arguments = payload.split()
         if arguments[:1] == ["connect"]:
 ''',
         '''        arguments = payload.split()
+        if arguments in (["payhip", "autopilot"], ["payhip", "create"]):
+            if gaming_mode.enabled():
+                self.say("Gaming Mode is ON. Type /engine gaming off before Payhip browser automation.")
+                return
+            self.say("Falcon will research Payhip's official guide, open its own Chrome "
+                     "session, use local visual/DOM analysis and clicks, and save only "
+                     "an Invisible draft. Sign in to Chrome once if prompted. "
+                     "No financial changes, public publishing or password capture.")
+            def work(cancel):
+                return payhip_browser_agent.run_first_product(cancel=cancel)
+            def complete(result):
+                self.app.set_status("Ready • Payhip draft submitted")
+                self.say("PAYHIP AUTOPILOT: " + result["status"] +
+                         "\\nPage: " + result["url"] +
+                         "\\nGuide: " + result["research_url"] +
+                         "\\n" + result["warning"])
+            self._launch("Falcon is researching and building the Payhip listing…",
+                         work, complete)
+            return
         if arguments in (["payhip"], ["payhip", "start"], ["store"], ["store", "open"]):
             try:
                 state = payhip_store.start_store()
@@ -130,6 +149,7 @@ palette = TARGET / "command_palette.py"
 replace(palette, '        Command("Money Mode: local workflow integrations", "/money integrations"),\n',
         '''        Command("Money Mode: local workflow integrations", "/money integrations"),
         Command("Open Payhip and prepare digital art product", "/money payhip"),
+        Command("Payhip AI browser autopilot (Invisible draft)", "/money payhip autopilot"),
         Command("Open reviewed website automatically", "/project preview "),
 ''')
 
@@ -168,7 +188,10 @@ foundation = TARGET / "falcon_foundation.py"
 replace(foundation, 'VERSION = "14.1.0"', 'VERSION = "14.2.0"')
 replace(foundation, 'if VERSION != "14.1.0":', 'if VERSION != "14.2.0":')
 replace(foundation, '    Capability("trusted_updates", "Verified Windows updates", "available",',
-        '''    Capability("payhip_store", "Payhip digital product storefront", "limited",
+        '''    Capability("payhip_browser_agent", "Payhip browser listing autopilot", "limited",
+               "Runs owner-invoked Playwright + optional local visual analysis to prepare an "
+               "Invisible listing, with STOP and no financial/public publication."),
+    Capability("payhip_store", "Payhip digital product storefront", "limited",
                "Opens Payhip and creates a local listing draft. No Payhip login, upload or publishing."),
     Capability("website_auto_preview", "Approved website browser preview", "available",
                "Opens saved/approved Falcon HTML in default browser without a second prompt."),
@@ -177,7 +200,11 @@ replace(foundation, '    Capability("trusted_updates", "Verified Windows updates
 entry = RUNTIME / "app_entry.py"
 replace(entry, "    if '--falcon-money-self-test' in sys.argv:\n",
         '''    if '--falcon-store-self-test' in sys.argv:
-        import website_preview, payhip_store
+        import website_preview, payhip_store, payhip_browser_agent
+        if not callable(payhip_browser_agent.run_first_product):
+            raise RuntimeError('Payhip browser automation missing')
+        if payhip_browser_agent.PAYHIP_DASHBOARD != 'https://payhip.com/dashboard':
+            raise RuntimeError('Payhip browser domain mismatch')
         if payhip_store.STORE_URL != 'https://payhip.com/':
             raise RuntimeError('Payhip site address unexpected')
         if not callable(website_preview.open_website):
@@ -196,12 +223,23 @@ replace(entry, "    if '--falcon-money-self-test' in sys.argv:\n",
     "After reviewing and approving a saved website, Falcon automatically "
     "opens its local index.html without asking for separate browser approval.\n"
     "Use /project preview <name> to open an existing saved Falcon website.\n"
+    "/money payhip autopilot reads official product setup guidance, runs real "
+    "Chrome page interactions using an isolated Payhip login profile, uploads "
+    "only known starter-pack files, verifies Invisible visibility and submits "
+    "the seller-only listing. STOP cancels at action boundaries.\n"
+    "Requires Google Chrome and the local wallpaper ZIP + cover in Downloads. "
+    "Playwright browser tooling is bundled; first-time Payhip sign-in is manual.\n"
     "No customer credentials, Payhip API, live transactions or guaranteed "
     "earnings. Existing Ollama chat, STOP, Gaming Mode and Money Mode retained.\n",
     encoding="utf-8")
 
-for name in ("payhip_store.py", "website_preview.py", "money_mode.py",
+for name in ("payhip_store.py", "website_preview.py", "payhip_browser_agent.py", "money_mode.py",
              "customer_faq.py", "developer_chat.py"):
     if not (TARGET / name).is_file():
         raise RuntimeError("Falcon V14.2 missing module: " + name)
-print("Staged Falcon V14.2 Payhip auto-open / website auto-preview candidate.")
+requirements = TARGET / "requirements.txt"
+old_requirements = requirements.read_text(encoding="utf-8")
+if "playwright" not in old_requirements.lower():
+    requirements.write_text(old_requirements.rstrip() + "\nplaywright==1.56.0\n",
+                            encoding="utf-8")
+print("Staged Falcon V14.2 Payhip auto-open / self-guided browser agent candidate.")
