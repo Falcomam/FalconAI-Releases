@@ -82,6 +82,10 @@ def route(text):
     if not isinstance(text, str):
         return None
     raw = text.strip()
+    if raw.casefold() in ("/shorts", "/shorts status"):
+        return "shorts_status", ""
+    if raw.casefold() == "/shorts draft":
+        return "shorts_draft", ""
     if raw.casefold() in ("/foundation", "/foundation status", "/capabilities"):
         return "foundation", ""
     match = _ENGINE.fullmatch(raw)
@@ -160,7 +164,11 @@ class ChatFeatures:
         if gaming_mode.enabled() and action in ("project_new", "project_edit", "project_edit_small"):
             self.say("Gaming Mode is ON. New AI project generation is paused to protect game performance. Type /engine gaming off to resume.")
             return True
-        if action == "foundation":
+        if action == "shorts_status":
+            self._shorts_status()
+        elif action == "shorts_draft":
+            self._shorts_draft()
+        elif action == "foundation":
             self.say(falcon_foundation.render_status(
                 gaming=gaming_mode.enabled(),
                 coding_model=engine_manager.saved_coding_model()))
@@ -378,6 +386,51 @@ class ChatFeatures:
             self._launch("Checking installed models…", work, complete)
             return
         self.say(ENGINE_HELP)
+
+    def _shorts_status(self):
+        try:
+            import datetime
+            import shorts_mode
+            folder = shorts_mode.OUT / datetime.date.today().isoformat()
+            if (folder / "FAILED.txt").exists():
+                state = "Failed or interrupted draft; inspect its folder."
+            elif (folder / "REVIEW_REQUIRED.txt").exists():
+                state = "Local draft ready for review."
+            elif folder.exists():
+                state = "Draft reserved or in progress; inspect its folder."
+            else:
+                state = "No draft reserved today."
+            self.say("Shorts Mode (local draft only). " + state +
+                     "\nGaming Mode: " + ("ON" if gaming_mode.enabled() else "OFF") +
+                     "\nFolder: " + str(folder) +
+                     "\nType /shorts draft to create today's video. No automatic publishing.")
+        except ImportError:
+            self.say("Shorts dependencies are not available in this build.")
+
+    def _shorts_draft(self):
+        if gaming_mode.enabled():
+            self.say("Gaming Mode is ON. Shorts generation is paused.")
+            return
+
+        def work(cancel):
+            try:
+                import shorts_mode
+                status = engine_manager.probe(timeout=3)
+                model = engine_manager.saved_chat_model()
+                if not status["online"] or model not in status["models"]:
+                    raise RuntimeError("Selected Ollama chat model is unavailable.")
+                folder = shorts_mode.create(model, cancel=cancel)
+                return True, str(folder)
+            except Exception as exc:
+                return False, str(exc)[:300]
+
+        def complete(result):
+            ok, detail = result
+            self.app.set_status("Ready • Shorts" if ok else "Error • Shorts")
+            self.say(("Local draft ready for review. No upload performed.\n" if ok else
+                      "Shorts draft not completed; partial files may exist.\n") + detail)
+
+        self._launch("Rendering local Short…", work, complete)
 
     def _generate(self, kind, goal):
         if self.app.busy or self._running:
