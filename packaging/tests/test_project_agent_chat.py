@@ -128,5 +128,63 @@ class CodingAgentChatTests(unittest.TestCase):
         self.assertIn("pending source proposal", self.app.messages[-1][1])
 
 
+    def test_architect_first_new_website_uses_same_review_approval_gate(self):
+        blueprint = {"kind": "website",
+                     "summary": "Polished purple creator website with responsive navigation.",
+                     "features": ["Responsive hero with clear typography",
+                                  "About and videos sections"],
+                     "files": ["index.html", "README.md"],
+                     "acceptance": ["Manually verify the navigation links and mobile layout."]}
+        html = ('<!doctype html><html><head><meta charset="UTF-8">'
+                '<meta name="viewport" content="width=device-width, initial-scale=1">'
+                '<title>LostFalcon</title><style>'
+                'main{display:grid;gap:2rem}@media(max-width:600px)'
+                '{main{display:block}}</style></head><body>'
+                '<nav><a href="#about">About</a></nav><main>'
+                '<section><h1>LostFalcon</h1></section>'
+                '<section id="about"><h2>About</h2>Gaming content</section>'
+                '</main></body></html>')
+        proposal = {"kind": "website", "name": "lostfalcon_pro",
+                    "files": {"index.html": html,
+                              "README.md": "To view, open index.html."}}
+        responses = iter([json.dumps(blueprint), json.dumps(proposal)])
+        calls = []
+        def ask(*_args, **kwargs):
+            calls.append(kwargs["model"])
+            return next(responses)
+        goal = "Build a modern LostFalcon creator website with a purple design."
+        with patch.object(self.chat, "_launch", side_effect=self.direct), \
+             patch.object(chat.engine_manager, "probe",
+                          return_value={"online": True, "models": ("coder:7b",)}), \
+             patch.object(chat.engine_manager, "saved_coding_model",
+                          return_value="coder:7b"), \
+             patch.object(chat.engine_manager, "saved_chat_model",
+                          return_value="qwen3:4b"), \
+             patch.dict(sys.modules, {"agent": types.SimpleNamespace(ask_ollama=ask)}):
+            self.chat.dispatch("/project architect website " + goal)
+        self.assertEqual(calls, ["coder:7b", "coder:7b"])
+        self.assertFalse(self.chat.pending["reviewed"])
+        self.assertEqual(self.chat.pending["plan"]["name"], "lostfalcon_pro")
+        self.assertIn("Architect", self.app.messages[-1][1])
+        # Creating source is not permission to save it; approval is blocked
+        # until the full source has been reviewed in Falcon chat.
+        self.chat.dispatch("/project approve")
+        self.assertIn("Review", self.app.messages[-1][1])
+        self.chat.dispatch("/project review")
+        self.assertTrue(self.chat.pending["reviewed"])
+        self.chat.dispatch("/project reject")
+        self.assertIsNone(self.chat.pending)
+
+    def test_architect_route_and_gaming_pause(self):
+        goal = "Create a purple gaming channel website with sections."
+        self.assertEqual(chat.route("/project architect website " + goal),
+                         ("project_architect", ("website", goal)))
+        with patch.object(chat.gaming_mode, "enabled", return_value=True), \
+             patch.object(self.chat, "_architect_new",
+                          side_effect=AssertionError("must not generate")):
+            self.chat.dispatch("/project architect website " + goal)
+        self.assertIn("Gaming Mode", self.app.messages[-1][1])
+
+
 if __name__ == "__main__":
     unittest.main()
