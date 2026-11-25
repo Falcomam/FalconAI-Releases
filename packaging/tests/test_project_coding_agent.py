@@ -200,6 +200,33 @@ class CodingAgentTests(unittest.TestCase):
         with self.assertRaises(agent.AgentError):
             agent._parse_blueprint(json.dumps(invalid), "website")
 
+    def test_architect_rejects_missing_or_unplanned_generated_files(self):
+        blueprint = {
+            "kind": "website",
+            "summary": "Design a coherent multi-section creator website.",
+            "features": ["Responsive navigation", "Clear video showcase"],
+            "files": ["index.html", "README.md"],
+            "acceptance": ["Verify page loads and navigation works"],
+        }
+        for generated_files in (
+            {"index.html": "<html><body>Missing README</body></html>"},
+            {"index.html": "<html></html>", "README.md": "Read me",
+             "secrets.txt": "Unexpected extra file"},
+        ):
+            with self.subTest(files=list(generated_files)):
+                model = MockModel([
+                    json.dumps(blueprint),
+                    json.dumps({"kind": "website", "name": "lostfalcon_site",
+                                "files": generated_files}),
+                ])
+                with self.assertRaisesRegex(
+                    agent.AgentError, "does not match the approved architecture"
+                ):
+                    agent.generate_new_project_with_architect(
+                        "website", "Build a modern purple LostFalcon creator site.",
+                        model="coder:7b", cancel=threading.Event(), ask=model)
+                self.assertEqual(len(model.calls), 2)
+
     def test_architect_stop_before_model_request(self):
         self.cancel.set()
         model = MockModel([])
