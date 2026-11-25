@@ -48,6 +48,8 @@ class MoneyControls:
         self.root=Path(root)
         self.window=features.app.root
         self.last_attempt=None
+        self.session_paused=False
+        self.review_active=False
         self.choice=tk.BooleanVar(master=self.window,value=enabled(self.root))
         menu_name=self.window.cget("menu")
         if menu_name:
@@ -59,6 +61,9 @@ class MoneyControls:
         self.menu.add_command(label="Daily report",command=features._shorts_status)
         self.menu.add_command(label="Generate today's video",command=features._shorts_draft)
         self.menu.add_command(label="Preview today's video",command=self.preview)
+        from shorts_publish_ui import PublishUI
+        self.publisher=PublishUI(self)
+        self.menu.add_command(label="Review and upload to YouTube",command=self.publisher.start)
         self.menu.add_checkbutton(label="Generate daily at 4 PM while Falcon is open",
                                    variable=self.choice,command=self.toggle)
         self.menu.add_command(label="Pause daily generation and stop current work",command=self.pause)
@@ -68,6 +73,7 @@ class MoneyControls:
     def toggle(self):
         try:
             set_enabled(bool(self.choice.get()),self.root)
+            self.session_paused=not bool(self.choice.get())
             self.features.say("Automatic local drafts "+("enabled" if self.choice.get() else "disabled")+
                               ". No automatic publishing.")
         except OSError:
@@ -75,6 +81,7 @@ class MoneyControls:
             self.features.say("Could not save Shorts preferences.")
 
     def pause(self):
+        self.session_paused=True
         self.choice.set(False)
         self.toggle()
         self.features.stop()
@@ -94,7 +101,8 @@ class MoneyControls:
             import gaming_mode
             now=dt.datetime.now().astimezone()
             day=now.date()
-            if (not self.features.app.busy and not self.features._running and
+            if (not self.session_paused and not self.review_active and
+                not self.features.app.busy and not self.features._running and
                 self.last_attempt!=day and due(now,self.root/"shorts",
                     enabled=enabled(self.root),
                     paused=gaming_mode.enabled() or (self.root/"shorts"/"STOP").exists())):
