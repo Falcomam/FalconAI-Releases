@@ -1,6 +1,6 @@
 """Falcon Shorts prototype: one local draft per calendar day, no auto-publish.
 Run with Python 3.10+, Ollama, Windows PowerShell, and FFmpeg on PATH.
-No credentials or generated code are executed. Procedural visuals are placeholders.
+No credentials or generated code are executed. Procedural cartoons are original artwork, not generative AI video. Pillow is required.
 """
 import argparse
 import datetime as dt
@@ -10,7 +10,8 @@ from pathlib import Path
 import re
 import subprocess
 import urllib.request
-from shorts_timing import distinct_story, scene_frames, timeline, scene_theme, FPS
+from shorts_timing import distinct_story, scene_frames, timeline, FPS
+from shorts_visuals import render_scene, SETTINGS, ACTIONS
 
 ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "FalconAI"
 OUT = ROOT / "shorts"
@@ -31,7 +32,7 @@ def script(model):
     check_pause()
     prompt = ("Write a completely original absurdist comedy microstory for a brainrot-style Short. Invent a surreal fictional object-animal character, give it a ridiculous goal, escalate with unexpected visual gags, and end with a surprising punchline. "
               "Return JSON with title and lines (exactly 6 short sentences, "
-              "each 8-16 words). Strong hook, rapid escalation, funny payoff. Vary the premise and setting. Do not imitate existing meme characters or voices. "
+              "each 8-16 words), and scenes (exactly 6 objects each with setting and action). Settings: kitchen, city, moon, gym, ocean, desert, office. Actions: stand, jump, run, panic, celebrate, fall. Match each visual to its narration. Strong hook, rapid escalation, funny payoff. Vary the premise and setting. Do not imitate existing meme characters or voices. "
               "No real people, copyrighted characters, or factual claims.")
     req = urllib.request.Request("http://127.0.0.1:11434/api/generate",
         data=json.dumps(dict(model=model, prompt=prompt, stream=False, format="json")).encode(),
@@ -46,7 +47,10 @@ def script(model):
         raise ValueError("Invalid story structure")
     if any(not isinstance(x,str) or not 8<=len(x.split())<=16 or len(x)>120 or not re.fullmatch(r"[A-Za-z0-9 ,.!?'\-]+",x) for x in lines):
         raise ValueError("Invalid story lines; retry")
-    return {"title":title, "lines":lines}
+    scenes = obj.get("scenes")
+    if not isinstance(scenes,list) or len(scenes)!=6 or any(not isinstance(s,dict) or s.get("setting") not in SETTINGS or s.get("action") not in ACTIONS for s in scenes):
+        raise ValueError("Invalid scene choices; retry")
+    return {"title":title, "lines":lines, "scenes":scenes}
 
 def run(cmd, cwd):
     check_pause()
@@ -97,10 +101,10 @@ $s.Dispose()
         (folder/"captions.srt").write_text(timeline(story["lines"],frames),encoding="utf-8")
         for i, count in enumerate(frames):
             check_pause()
-            c0,c1 = scene_theme(key,i)
-            # Distinct procedural colors; not yet character artwork.
-            run(["ffmpeg","-nostdin","-y","-f","lavfi","-i",
-                 f"gradients=s=720x1280:r={FPS}:c0={c0}:c1={c1}:speed=0.03",
+            scene = story["scenes"][i]
+            render_scene(key,i,scene["setting"],scene["action"],folder/f"art{i}.png")
+            run(["ffmpeg","-nostdin","-y","-loop","1","-framerate",str(FPS),"-i",f"art{i}.png",
+                 "-vf","scale=1440:2560,zoompan=z=1.04+0.0004*on:x=iw/2-iw/zoom/2:y=ih/2-ih/zoom/2:d=1:s=720x1280:fps=30",
                  "-i",f"voice{i}.wav","-map","0:v","-map","1:a",
                  "-af","apad","-t",f"{count/FPS:.6f}","-c:v","libx264",
                  "-preset","veryfast","-pix_fmt","yuv420p","-c:a","aac",
