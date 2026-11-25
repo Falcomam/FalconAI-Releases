@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import subprocess
 import urllib.request
+from shorts_timing import distinct_story, scene_frames, timeline, scene_theme, FPS
 
 ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "FalconAI"
 OUT = ROOT / "shorts"
@@ -75,8 +76,9 @@ def create(model):
     folder.mkdir(exist_ok=False)
     try:
         story=script(model)
+        key = distinct_story(story, OUT, folder)
         (folder/"story.json").write_text(json.dumps(story,indent=2),encoding="utf-8")
-        # Windows installed speech voices; text passed via file, never interpolated.
+        # One actual speech recording per scene, not guessed timing.
         (folder/"speak.ps1").write_text("""Add-Type -AssemblyName System.Speech
 $s=New-Object System.Speech.Synthesis.SpeechSynthesizer
 $s.Rate=-1
@@ -84,14 +86,30 @@ $s.SetOutputToWaveFile((Join-Path (Get-Location) 'voice.wav'))
 $s.Speak([IO.File]::ReadAllText((Join-Path (Get-Location) 'narration.txt')))
 $s.Dispose()
 """,encoding="utf-8")
-        (folder/"narration.txt").write_text(" ".join(story["lines"]),encoding="utf-8")
-        run(["powershell.exe","-NoProfile","-NonInteractive","-File","speak.ps1"],folder)
-        # Minimal original motion background, not AI imagery or timed subtitles.
-        run(["ffmpeg","-nostdin","-y","-f","lavfi","-i",
-             "gradients=s=720x1280:r=30:c0=0x10051f:c1=0x432657:speed=0.03",
-             "-i","voice.wav","-map","0:v","-map","1:a","-c:v","libx264",
-             "-preset","veryfast","-pix_fmt","yuv420p","-c:a","aac",
-             "-shortest","-t","60","draft.mp4"],folder)
+        frames = []
+        for i, line in enumerate(story["lines"]):
+            check_pause()
+            (folder/"narration.txt").write_text(line,encoding="utf-8")
+            run(["powershell.exe","-NoProfile","-NonInteractive","-File","speak.ps1"],folder)
+            voice = folder / f"voice{i}.wav"
+            (folder/"voice.wav").replace(voice)
+            frames.append(scene_frames(voice))
+        (folder/"captions.srt").write_text(timeline(story["lines"],frames),encoding="utf-8")
+        for i, count in enumerate(frames):
+            check_pause()
+            c0,c1 = scene_theme(key,i)
+            # Distinct procedural colors; not yet character artwork.
+            run(["ffmpeg","-nostdin","-y","-f","lavfi","-i",
+                 f"gradients=s=720x1280:r={FPS}:c0={c0}:c1={c1}:speed=0.03",
+                 "-i",f"voice{i}.wav","-map","0:v","-map","1:a",
+                 "-af","apad","-t",f"{count/FPS:.6f}","-c:v","libx264",
+                 "-preset","veryfast","-pix_fmt","yuv420p","-c:a","aac",
+                 "-ar","48000","-ac","1",f"scene{i}.mp4"],folder)
+        (folder/"segments.txt").write_text("".join(f"file scene{i}.mp4\n" for i in range(6)),encoding="ascii")
+        run(["ffmpeg","-nostdin","-y","-f","concat","-safe","1","-i","segments.txt",
+             "-vf","subtitles=captions.srt:force_style='FontSize=20,Alignment=2,MarginV=100'",
+             "-c:v","libx264","-preset","veryfast","-pix_fmt","yuv420p",
+             "-c:a","aac","-movflags","+faststart","draft.mp4"],folder)
         check_pause()
         (folder/"REVIEW_REQUIRED.txt").write_text("Private local draft. Review audio, duration, originality, imagery and disclosure before uploading. No upload performed.",encoding="utf-8")
         return folder
