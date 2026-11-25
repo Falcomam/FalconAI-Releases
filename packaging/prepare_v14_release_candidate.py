@@ -75,6 +75,9 @@ def main():
     shutil.copytree(BASE_RUNTIME, RUNTIME,
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".venv"))
 
+    from stage_shorts import stage_shorts
+    stage_shorts(REPO / "packaging", TARGET)
+
     replace_visible_versions(TARGET / "falcon.py")
     replace_visible_versions(TARGET / "falcon_launcher.py")
     replace_exact(TARGET / "release_updates.py",
