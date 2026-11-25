@@ -85,6 +85,8 @@ def verify(source, runtime, *, previous_installer=None):
         raise ContractError("Inno Setup installer version mismatch")
     if "falcon_app_v14_runtime\\Falcon_Ai_Icon.ico" not in iss:
         raise ContractError("Installer icon path no longer points to V14 runtime")
+    if "--falcon-foundation-self-test" not in entry:
+        raise ContractError("Frozen V14 foundation self-test missing")
     if "--falcon-diagnostics-self-test" not in entry:
         raise ContractError("13/13 frozen diagnostics self-test missing")
     if "sys.modules['diagnostics'] = packaged_diagnostics" not in entry:
