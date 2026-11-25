@@ -65,6 +65,7 @@ class MoneyControls:
         self.publisher=PublishUI(self)
         self.menu.add_command(label="Review and upload to YouTube",command=self.publisher.start)
         self.menu.add_command(label="Open YouTube Studio (manual upload)",command=self.manual_upload)
+        self.menu.add_command(label="Install Shorts writer",command=self.install_writer)
         self.menu.add_command(label="Get FFmpeg media tools",command=self.media_help)
         self.menu.add_checkbutton(label="Generate daily at 4 PM while Falcon is open",
                                    variable=self.choice,command=self.toggle)
@@ -97,6 +98,28 @@ class MoneyControls:
             os.startfile(str(path))
         except (OSError,AttributeError):
             self.features.say("Could not open the video with the Windows default player.")
+
+    def install_writer(self):
+        from tkinter import messagebox
+        import gaming_mode
+        if self.features.app.busy or self.features._running or gaming_mode.enabled():
+            self.features.say("Finish current work and turn off Gaming Mode before installing the writer.")
+            return
+        if not messagebox.askyesno("Install local Shorts writer",
+                "Download the official Qwen3 4B Instruct model through local Ollama (about 2.5 GB)? Your existing chat and coding models are unchanged.",
+                parent=self.window):
+            return
+        def work(cancel):
+            try:
+                import shorts_mode
+                return True, shorts_mode.install_story_model(cancel)
+            except Exception as exc:
+                return False, str(exc)[:240]
+        def complete(result):
+            ok, detail = result
+            self.features.app.set_status("Ready" if ok else "Writer installation failed")
+            self.features.say(detail)
+        self.features._launch("Installing local Shorts writer...", work, complete)
 
     def media_help(self):
         import webbrowser
