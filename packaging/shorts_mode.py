@@ -47,6 +47,43 @@ def preferred_story_model(selected, installed):
         return "qwen3:4b-instruct"
     return selected
 
+def install_story_model(cancel):
+    """Pull only the fixed official writer after UI confirmation; no shell."""
+    import engine_manager
+    state = engine_manager.probe(timeout=3)
+    if not state["online"]:
+        raise RuntimeError("Start Ollama using Tools > AI Engine first.")
+    if preferred_story_model("", state["models"]):
+        return "Shorts writer already installed."
+    exe = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs/Ollama/ollama.exe"
+    if not exe.is_file():
+        raise RuntimeError("Official Ollama installation not found. Open the Ollama app to install "+SHORTS_MODEL)
+    env = dict(os.environ, OLLAMA_HOST="http://127.0.0.1:11434")
+    if cancel.is_set() or paused():
+        raise RuntimeError("Model download paused.")
+    with subprocess.Popen([str(exe), "pull", SHORTS_MODEL], cwd=str(exe.parent),
+                          env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                          stderr=subprocess.DEVNULL, creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0)) as proc:
+        deadline = time.monotonic() + 3600
+        try:
+            while proc.poll() is None:
+                if cancel.is_set() or paused() or time.monotonic() > deadline:
+                    raise RuntimeError("Writer download stopped or timed out.")
+                time.sleep(.5)
+            if proc.returncode:
+                raise RuntimeError("Ollama could not download the writer. Check network and available disk space.")
+        finally:
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+    if not preferred_story_model("", engine_manager.probe(timeout=3)["models"]):
+        raise RuntimeError("Download finished, but Ollama did not report the writer installed.")
+    return "Shorts writer installed. Generate today's video."
+
 def story_schema():
     return {
         "type": "object", "required": ["title", "lines", "scenes"],
@@ -73,7 +110,7 @@ def script(model):
         check_pause()
         try:
             req = urllib.request.Request("http://127.0.0.1:11434/api/generate",
-                data=json.dumps(dict(model=model, prompt=prompt, stream=False, think=False, format=story_schema(), options={"num_ctx":4096,"num_predict":1024,"temperature":0.55})).encode(),
+                data=json.dumps(dict(model=model, prompt=prompt, stream=False, think=False, format=story_schema(), keep_alive=0, options={"num_ctx":4096,"num_predict":1024,"temperature":0.55})).encode(),
                 headers={"Content-Type":"application/json"})
             with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=120) as r:
                 raw = r.read(128001)
@@ -87,13 +124,13 @@ def script(model):
             if exc.code not in (429, 500, 502, 503, 504):
                 raise RuntimeError(f"Ollama HTTP {exc.code}; check selected model in AI Engine.") from None
             if attempt == 2:
-                raise RuntimeError(f"Ollama HTTP {exc.code} after three bounded attempts. Install {SHORTS_MODEL} for Shorts; no upload occurred.") from None
+                raise RuntimeError(f"Ollama HTTP {exc.code} after three bounded attempts. Use Money Mode > Install Shorts writer; no upload occurred.") from None
         except (urllib.error.URLError, TimeoutError, socket.timeout):
             if attempt == 2:
                 raise RuntimeError("Local Ollama unavailable or timed out after three attempts. No upload occurred.") from None
         except (ValueError, KeyError, TypeError, AttributeError):
             if attempt == 2:
-                raise ValueError("Qwen returned invalid narration or scenes three times. No video was uploaded.") from None
+                raise ValueError("Qwen returned invalid narration or scenes three times. Use Money Mode > Install Shorts writer if not installed. No video was uploaded.") from None
             prompt += " Repair the output: six plain English narration sentences, 6-18 words each, no emoji or markup, six valid scene objects."
     raise AssertionError("Unreachable")
 
