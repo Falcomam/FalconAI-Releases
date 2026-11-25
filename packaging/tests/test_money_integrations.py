@@ -107,12 +107,14 @@ class LocalMoneyIntegrationsTests(unittest.TestCase):
 
     def test_webhook_does_not_follow_ambient_proxies(self):
         import urllib.request
-        opener = connectors._opener()
-        self.assertIsNotNone(opener)
+        open_method = connectors._opener()
+        self.assertTrue(callable(open_method))
+        # urllib's OpenerDirector.open is a bound method, not the director.
+        handlers = open_method.__self__.handlers
         self.assertFalse(any(isinstance(x, urllib.request.ProxyHandler)
-                             and x.proxies for x in opener.handlers))
+                             and x.proxies for x in handlers))
         self.assertTrue(any(isinstance(x, connectors._NoRedirect)
-                            for x in opener.handlers))
+                            for x in handlers))
 
     def test_untrusted_order_data_must_be_valid(self):
         connectors.set_endpoint("n8n", "http://127.0.0.1:5678/webhook/abcde",
