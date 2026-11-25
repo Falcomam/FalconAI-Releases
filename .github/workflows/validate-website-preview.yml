@@ -1,0 +1,69 @@
+name: Validate saved website no-approval preview (development)
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packaging/website_preview.py"
+      - "packaging/tests/test_website_preview.py"
+      - "packaging/prepare_website_preview_candidate.py"
+      - ".github/workflows/validate-website-preview.yml"
+  pull_request:
+    paths:
+      - "packaging/website_preview.py"
+      - "packaging/tests/test_website_preview.py"
+      - "packaging/prepare_website_preview_candidate.py"
+      - ".github/workflows/validate-website-preview.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preview:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run bounded browser preview security tests
+        shell: bash
+        run: |
+          python -m unittest discover -s packaging/tests -p test_website_preview.py -v
+      - name: Stage full V14 coding agent and preview integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install 'Pillow>=11.0'
+          for patch in v13.6 v13.6.1 v13.6.2 v13.6.3 v13.6.4 v13.6.5; do
+            python "patches/$patch/apply.py"
+          done
+          for script in \
+            prepare.py prepare_icon_release.py prepare_engine_candidate.py \
+            prepare_single_chat_candidate.py prepare_v138_release.py \
+            prepare_copy_reply_candidate.py prepare_command_palette_candidate.py \
+            prepare_web_quality_candidate.py prepare_project_revision_candidate.py \
+            prepare_project_browser_candidate.py prepare_next_bundle_windows.py \
+            prepare_project_search_candidate.py prepare_quiet_powershell_candidate.py \
+            prepare_packaged_health_candidate.py finalize_packaged_health_release.py \
+            prepare_v14_release_candidate.py prepare_agent_coding_candidate.py \
+            prepare_website_preview_candidate.py; do
+            python "packaging/$script"
+          done
+          python -m compileall -q build/Falcon_Ai_WebsitePreview_Candidate
+          python - <<'PY'
+          import sys
+          from pathlib import Path
+          root = Path("build/Falcon_Ai_WebsitePreview_Candidate")
+          sys.path.insert(0, str(root.resolve()))
+          import developer_chat
+          assert developer_chat.route("/project preview lostfalcon_website") == (
+              "project_preview", "lostfalcon_website")
+          assert developer_chat.route("/project preview ../private") == (
+              "project_preview", "../private")
+          assert (root / "website_preview.py").is_file()
+          print("Staged chat preview route available; unsafe names rejected by preview_url")
+          PY
