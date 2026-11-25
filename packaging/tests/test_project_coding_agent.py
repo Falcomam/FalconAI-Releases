@@ -152,5 +152,70 @@ class CodingAgentTests(unittest.TestCase):
             agent.repository_map(self.base, GOAL, max_chars=100_000)
 
 
+    def test_architect_first_website_stays_inert_with_real_source_review(self):
+        blueprint = {
+            "kind": "website", "summary":
+                "Create a polished purple gaming page with accessible navigation.",
+            "features": ["Hero section introducing the creator",
+                         "Responsive navigation and About section"],
+            "files": ["index.html", "README.md"],
+            "acceptance": ["Open index.html and verify the Home and About links work."],
+        }
+        html = ('<!DOCTYPE html><html lang="en"><head>'
+                '<meta charset="UTF-8"><title>LostFalcon</title>'
+                '<meta name="viewport" content="width=device-width, initial-scale=1">'
+                '<style>nav{display:flex;gap:1rem}@media(max-width:600px)'
+                '{nav{flex-direction:column}}</style></head><body>'
+                '<nav><a href="#home">Home</a><a href="#about">About</a></nav>'
+                '<main id="home"><section><h1>LostFalcon</h1></section>'
+                '<section id="about"><h2>About</h2><p>Gaming creator.</p>'
+                '</section></main></body></html>')
+        model = MockModel([
+            json.dumps(blueprint),
+            json.dumps({"kind": "website", "name": "lostfalcon_site",
+                        "files": {"index.html": html,
+                                  "README.md": "Open index.html locally"}}),
+        ])
+        outcome = agent.generate_new_project_with_architect(
+            "website", "Build a modern purple LostFalcon YouTube site.",
+            model="coder:7b", cancel=self.cancel, ask=model)
+        self.assertEqual(outcome["plan"]["name"], "lostfalcon_site")
+        self.assertFalse(outcome["execution_allowed"])
+        self.assertFalse(outcome["tested"])
+        self.assertIn("fingerprint", outcome["review"])
+        self.assertEqual(len(model.calls), 2)
+        self.assertEqual(model.calls[0]["limit"], 1400)
+        self.assertEqual(model.calls[1]["limit"], 6500)
+
+    def test_architect_rejects_extra_permissions_and_wrong_kind(self):
+        invalid = {"kind": "website", "summary": "Create a beautiful website",
+                   "files": ["index.html", "README.md"],
+                   "features": ["Responsive design", "Meaningful sections"],
+                   "acceptance": ["Check layout"],
+                   "execute_shell": True}
+        with self.assertRaises(agent.AgentError):
+            agent._parse_blueprint(json.dumps(invalid), "website")
+        invalid.pop("execute_shell")
+        invalid["kind"] = "python"
+        with self.assertRaises(agent.AgentError):
+            agent._parse_blueprint(json.dumps(invalid), "website")
+
+    def test_architect_stop_before_model_request(self):
+        self.cancel.set()
+        model = MockModel([])
+        self.assertIsNone(agent.generate_new_project_with_architect(
+            "website", "Build a polished gaming website",
+            model="coder:7b", cancel=self.cancel, ask=model))
+        self.assertEqual(model.calls, [])
+
+    def test_architect_fails_without_generating_source_after_bad_blueprints(self):
+        model = MockModel(["{}", "{}"])
+        with self.assertRaises(agent.AgentError):
+            agent.generate_new_project_with_architect(
+                "website", "Build a polished gaming website",
+                model="coder:7b", cancel=self.cancel, ask=model)
+        self.assertEqual(len(model.calls), 2)
+
+
 if __name__ == "__main__":
     unittest.main()
