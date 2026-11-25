@@ -4,13 +4,16 @@ on:
     branches: [main]
     paths:
       - "packaging/money_mode.py"
+      - "packaging/customer_faq.py"
       - "packaging/tests/test_money_mode.py"
+      - "packaging/tests/test_customer_faq.py"
       - "packaging/prepare_money_mode_candidate.py"
       - ".github/workflows/validate-money-mode.yml"
   pull_request:
     paths:
       - "packaging/money_mode.py"
       - "packaging/tests/test_money_mode.py"
+      - "packaging/tests/test_customer_faq.py"
       - "packaging/prepare_money_mode_candidate.py"
       - ".github/workflows/validate-money-mode.yml"
   workflow_dispatch:
@@ -33,4 +36,5 @@ jobs:
         shell: bash
         run: |
           python -m unittest discover -s packaging/tests -p test_money_mode.py -v
-          python -m compileall -q packaging/money_mode.py packaging/prepare_money_mode_candidate.py
+          python -m unittest discover -s packaging/tests -p test_customer_faq.py -v
+          python -m compileall -q packaging/money_mode.py packaging/customer_faq.py packaging/prepare_money_mode_candidate.py
