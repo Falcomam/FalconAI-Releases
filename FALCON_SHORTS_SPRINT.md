@@ -30,3 +30,11 @@ Current status: prompt changed from horror to original absurd comedy. Gradient b
 - Current research: https://www.youtube.com/watch?v=0mT4p86ZxGQ describes a shot-by-shot local ComfyUI workflow using LTX and Flux; description only, no complete transcript obtained. Benchmark VRAM before choosing a model.
 - Official current upload documentation: https://developers.google.com/youtube/data/guides/uploading_a_video and https://developers.google.com/youtube/data/reference/rest/v3/videos/insert describe authorized upload. Reconcile current API policy and required minimum functionality before release. https://support.google.com/youtube/answer/1311392 and https://support.google.com/youtube/answer/2801973 reinforce originality and anti-spam; don't assume AI-generated daily posts qualify for monetization.
 - No live uploads or new installer in this sprint.
+
+
+## Follow-up: recurring cartoon visuals and draft watch
+- Added shorts_visuals.py (82f8967), story-selected scene rendering and camera motion (5c9e4aa, f012bfe). The model now chooses from validated settings and poses. One deterministic procedural cartoon creature retains its colors and body style across the six scenes. This is simple authored art, not diffusion-generated animation.
+- Added opt-in foreground draft watch (c6e19e1, 1ad3c5d), default preparation at 4 PM local time to leave review time before the proposed 6 PM publication. One date reservation, no missed-day catchup. Requires process running; no Windows background installation or YouTube posting yet.
+- Added test_shorts_draft.py (4c583d7) and updated CI (38bae12). Tests configured, CI result not confirmed. Pillow dependency now required; frozen installer integration still pending.
+- Local Linux FFmpeg smoke test using a synthetic PNG and sine-wave audio passed the new camera filter: ffprobe confirmed 720x1280 video, audio stream, 1.7 seconds. Does not verify full renderer, Ollama, Windows speech, actual visual quality or uploaded output.
+- Next: improve scene-specific artwork, use a licensed local image-generation backend, verify full media output, connect authorized YouTube upload and integrate the daily scheduler with Falcon's existing STOP and main UI. No release published.
