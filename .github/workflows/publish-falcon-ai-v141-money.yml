@@ -102,8 +102,8 @@ jobs:
               "message_copy.py","command_palette.py","html_quality.py",
               "project_revision.py","project_browser.py",
               "gaming_mode.py","falcon_foundation.py","site_design_check.py"))
-          assert "CURRENT_VERSION = (14, 0, 0)" in (runtime/"app_updates.py").read_text()
-          assert "CURRENT_VERSION != (14, 0, 0)" in (runtime/"app_entry.py").read_text()
+          assert "CURRENT_VERSION = (14, 1, 0)" in (runtime/"app_updates.py").read_text()
+          assert "CURRENT_VERSION != (14, 1, 0)" in (runtime/"app_entry.py").read_text()
           assert "MyAppVersion \"14.1.0\"" in (runtime/"Falcon_Ai.iss").read_text()
           assert "Falcon_Ai_Icon.ico" in (runtime/"Falcon_Ai.iss").read_text()
           gui=(source/"falcon.py").read_text(encoding="utf-8")
