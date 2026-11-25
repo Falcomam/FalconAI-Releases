@@ -5,6 +5,9 @@ on:
     paths:
       - ".github/workflows/verify-falcon-ai-v14.yml"
       - "packaging/prepare_v14_release_candidate.py"
+      - "packaging/shorts*.py"
+      - "packaging/stage_shorts.py"
+      - "packaging/tests/test_shorts*.py"
       - "packaging/v14_release_checks.py"
       - "packaging/falcon_foundation.py"
       - "packaging/tests/test_v14_release_checks.py"
@@ -260,3 +263,16 @@ jobs:
           if ((Get-Item $setup).Length -lt 5000000) { throw 'Candidate installer unexpectedly small' }
           Write-Host ("PASS: V14.0.0 full Windows installer, clean install, prior-release upgrade and relaunch. Internal SHA256: " + $hash)
           Write-Host 'NO PUBLIC RELEASE CREATED. Candidate only.'
+          $hash | Set-Content -LiteralPath 'output/Falcon_Ai_Setup.sha256' -Encoding ascii
+          git rev-parse HEAD | Set-Content -LiteralPath 'output/SOURCE_COMMIT.txt' -Encoding ascii
+          if ($LASTEXITCODE -ne 0) { throw 'Source identity capture failed' }
+      - name: Retain the exact verified internal candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: falcon-v14-verified-internal-candidate
+          path: |
+            output/Falcon_Ai_Setup.exe
+            output/Falcon_Ai_Setup.sha256
+            output/SOURCE_COMMIT.txt
+          if-no-files-found: error
+          retention-days: 14
