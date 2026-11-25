@@ -9,6 +9,7 @@ on:
       - "packaging/tests/test_customer_faq.py"
       - "packaging/tests/test_money_mode_chat.py"
       - "packaging/prepare_money_mode_candidate.py"
+      - "packaging/prepare_agent_coding_candidate.py"
       - ".github/workflows/validate-money-mode.yml"
   pull_request:
     paths:
@@ -17,6 +18,7 @@ on:
       - "packaging/tests/test_customer_faq.py"
       - "packaging/tests/test_money_mode_chat.py"
       - "packaging/prepare_money_mode_candidate.py"
+      - "packaging/prepare_agent_coding_candidate.py"
       - ".github/workflows/validate-money-mode.yml"
   workflow_dispatch:
 permissions:
