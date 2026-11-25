@@ -139,7 +139,7 @@ class ChatFeatures:
         self._running = False
         # Display once when the existing main chat is ready, without starting AI.
         try:
-            self.app.root.after_idle(self._shorts_status)
+            self.app.root.after_idle(self._setup_money_mode)
         except (AttributeError, RuntimeError):
             pass
 
@@ -391,6 +391,16 @@ class ChatFeatures:
             self._launch("Checking installed models…", work, complete)
             return
         self.say(ENGINE_HELP)
+
+    def _setup_money_mode(self):
+        if getattr(self, "_money_controls", None) is not None:
+            return
+        self._shorts_status()
+        try:
+            import shorts_controls
+            self._money_controls = shorts_controls.MoneyControls(self)
+        except (ImportError, AttributeError, RuntimeError, OSError) as exc:
+            self.say("Money Mode controls unavailable: " + str(exc)[:160])
 
     def _shorts_status(self):
         try:
