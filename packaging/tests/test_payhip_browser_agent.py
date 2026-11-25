@@ -128,7 +128,7 @@ class BrowserSmoke(unittest.TestCase):
         choice = ("<!doctype html><html><body>"
                   "<a href='/product/new/digital'>Digital Product</a></body></html>")
         form = """<!doctype html><html><body>
-        <form id="product" onsubmit="event.preventDefault();window.location.assign(\'/product/edit/mock\')">
+        <form id="product" onsubmit="event.preventDefault();document.body.textContent='Product created successfully'">
          <label>Upload product file <input name="productFile" type="file" accept=".zip"></label>
          <label>Product title <input name="productName" type="text"></label>
          <label>Price <input type="number" name="price"></label>
@@ -159,7 +159,7 @@ class BrowserSmoke(unittest.TestCase):
                     requester=None)
                 self.assertEqual(result["status"], "invisible_product_saved_in_browser")
                 from urllib.parse import urlsplit
-                self.assertEqual(urlsplit(result["url"]).path, "/product/edit/mock")
+                self.assertEqual(urlsplit(result["url"]).path, "/product/new/digital")
             finally:
                 browser.close()
 
