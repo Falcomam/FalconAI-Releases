@@ -360,13 +360,37 @@ def fill_invisible_listing(page, product, files, *, cancel=None, requester=None)
     save = _named_control(page, ["Add Product", "Save Product", "Save"])
     if save is None:
         raise BrowserAgentError("Cannot identify final Payhip save button")
+    start_url = page.url
     save.click(timeout=10_000)
     _cancel(cancel)
     _guard_payhip(page)
-    return {"status": "invisible_product_save_submitted",
+    # Dynamic product saves can change URL asynchronously. Do not announce
+    # success merely because the button accepted a click.
+    verified = False
+    until = time.monotonic() + 10
+    while time.monotonic() < until:
+        _cancel(cancel)
+        _guard_payhip(page)
+        current = urlsplit(page.url)
+        if page.url != start_url and ("/product/edit/" in current.path
+                                       or "/products/" in current.path):
+            verified = True
+            break
+        visible = page.get_by_text(re.compile(
+            r"product (?:created|added|saved) successfully|product created",
+            re.I))
+        if visible.count() and visible.first.is_visible():
+            verified = True
+            break
+        page.wait_for_timeout(250)
+    if not verified:
+        raise BrowserAgentError(
+            "Falcon clicked Save on the Invisible listing but Payhip did not "
+            "confirm it. Inspect the Chrome tab; Falcon will not click Save again.")
+    return {"status": "invisible_product_saved_in_browser",
             "url": page.url,
-            "warning": ("Falcon submitted a seller-only Invisible product. "
-                        "Check Payhip's confirmation and review before making it public.")}
+            "warning": ("Payhip confirmed a seller-only Invisible product in browser. "
+                        "Review it before making the listing public.")}
 
 
 def run_first_product(*, cancel=None, download_dir=None, opener=None,
