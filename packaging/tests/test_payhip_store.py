@@ -32,8 +32,8 @@ class PayhipStarterTests(unittest.TestCase):
             (self.root / store.FIRST_PRODUCT / "PRODUCT_DRAFT.json").read_text(encoding="utf-8")
         )
         self.assertIn("NOT YET CREATED", saved["status"])
-        self.assertEqual(len(saved["planned_artworks"]), 10)
-        self.assertEqual(saved["suggested_price_usd"], "9.99")
+        self.assertEqual(len(saved["planned_artworks"]), 3)
+        self.assertEqual(saved["suggested_price_usd"], "4.99")
         self.assertTrue((self.root / store.FIRST_PRODUCT /
                          "README_START_HERE.md").exists())
         self.assertEqual(browser.call_count, 1)
