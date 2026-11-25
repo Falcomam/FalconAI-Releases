@@ -1,0 +1,39 @@
+name: Validate free research and knowledge memory foundation
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packaging/public_research.py"
+      - "packaging/research_memory.py"
+      - "packaging/tests/test_public_research.py"
+      - "packaging/tests/test_research_memory.py"
+      - ".github/workflows/validate-research-foundation.yml"
+  pull_request:
+    paths:
+      - "packaging/public_research.py"
+      - "packaging/research_memory.py"
+      - "packaging/tests/test_public_research.py"
+      - "packaging/tests/test_research_memory.py"
+      - ".github/workflows/validate-research-foundation.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run offline research and memory unit tests
+        shell: bash
+        run: |
+          python -m unittest discover -s packaging/tests -p test_public_research.py -v
+          python -m unittest discover -s packaging/tests -p test_research_memory.py -v
+          python -m compileall -q packaging/public_research.py packaging/research_memory.py
