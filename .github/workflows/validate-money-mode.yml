@@ -4,8 +4,10 @@ on:
     branches: [main]
     paths:
       - "packaging/money_mode.py"
+      - "packaging/money_integrations.py"
       - "packaging/customer_faq.py"
       - "packaging/tests/test_money_mode.py"
+      - "packaging/tests/test_money_integrations.py"
       - "packaging/tests/test_customer_faq.py"
       - "packaging/tests/test_money_mode_chat.py"
       - "packaging/prepare_money_mode_candidate.py"
@@ -14,7 +16,9 @@ on:
   pull_request:
     paths:
       - "packaging/money_mode.py"
+      - "packaging/money_integrations.py"
       - "packaging/tests/test_money_mode.py"
+      - "packaging/tests/test_money_integrations.py"
       - "packaging/tests/test_customer_faq.py"
       - "packaging/tests/test_money_mode_chat.py"
       - "packaging/prepare_money_mode_candidate.py"
@@ -40,8 +44,9 @@ jobs:
         shell: bash
         run: |
           python -m unittest discover -s packaging/tests -p test_money_mode.py -v
+          python -m unittest discover -s packaging/tests -p test_money_integrations.py -v
           python -m unittest discover -s packaging/tests -p test_customer_faq.py -v
-          python -m compileall -q packaging/money_mode.py packaging/customer_faq.py packaging/prepare_money_mode_candidate.py
+          python -m compileall -q packaging/money_mode.py packaging/money_integrations.py packaging/customer_faq.py packaging/prepare_money_mode_candidate.py
   staged-chat:
     runs-on: windows-latest
     timeout-minutes: 30
