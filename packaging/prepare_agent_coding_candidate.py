@@ -29,7 +29,7 @@ def patch(path, old, new):
     contents = file.read_text(encoding="utf-8")
     if contents.count(old) != 1:
         raise RuntimeError("Coding agent integration anchor mismatch: " + path
-                           + " occurrences=" + str(contents.count(old)))
+                           + " occurrences=" + str(contents.count(old)) + " anchor=" + repr(old[:130]))
     file.write_text(contents.replace(old, new, 1), encoding="utf-8")
 
 
