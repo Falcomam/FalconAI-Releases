@@ -80,7 +80,7 @@ jobs:
             python -m unittest discover -s packaging/tests -p $test -v
             if ($LASTEXITCODE -ne 0) { throw "New feature regression failed: $test" }
           }
-          foreach ($test in @('test_money_mode.py','test_money_integrations.py','test_customer_faq.py','test_money_mode_chat.py','test_payhip_store.py','test_website_preview.py')) {
+          foreach ($test in @('test_money_mode.py','test_money_integrations.py','test_customer_faq.py','test_money_mode_chat.py','test_payhip_store.py','test_website_preview.py','test_payhip_browser_agent.py')) {
             python -m unittest discover -s packaging/tests -p $test -v
             if ($LASTEXITCODE -ne 0) { throw "Money Mode regression failed: $test" }
           }
@@ -146,7 +146,7 @@ jobs:
             '--add-data',($runtime + '\Falcon_Ai_Icon.png;.'),
             '--icon',($runtime + '\Falcon_Ai_Icon.ico'),
             '--hidden-import=winotify','--hidden-import=pyautogui',
-            '--hidden-import=PIL.Image','--collect-all=pyautogui'
+            '--hidden-import=PIL.Image','--collect-all=pyautogui','--collect-all=playwright'
           )
           Get-ChildItem -LiteralPath $source -Filter '*.py' -File | ForEach-Object {
             $args += @('--add-data',($_.FullName + ';.'))
