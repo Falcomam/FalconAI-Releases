@@ -115,6 +115,19 @@ class MoneyModeTests(unittest.TestCase):
             money.get_order(order["id"], root=self.root)
         self.assertEqual(outside.read_text(encoding="utf-8"), "NO TOUCH")
 
+    def test_public_seller_handle_is_local_and_does_not_grant_access(self):
+        self.assertIsNone(money.saved_seller_handle(root=self.root))
+        response = money.handle_command("seller falconant", root=self.root)
+        self.assertIn("@falconant", response)
+        self.assertIn("No Fiverr login", response)
+        self.assertEqual(money.saved_seller_handle(root=self.root), "falconant")
+        data = (self.root.parent / "seller_profile.json").read_text(encoding="utf-8")
+        self.assertNotIn("password", data)
+        self.assertNotIn("token", data)
+        with self.assertRaises(money.MoneyError):
+            money.handle_command("seller https://www.fiverr.com/sellers/falconant/edit",
+                                 root=self.root)
+
     def test_user_chat_command_roundtrip(self):
         response = money.handle_command(
             "new website | Example | Build an accessible four-page website with purple colors",
