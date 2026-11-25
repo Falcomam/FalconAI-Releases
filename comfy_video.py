@@ -2,4 +2,6 @@
 from pathlib import Path
 from runpy import run_path
 
-ComfyVideo = run_path(str(Path(__file__).parent / "packaging" / "comfy_video.py"))["ComfyVideo"]
+_adapter = run_path(str(Path(__file__).parent / "packaging" / "comfy_video.py"))
+ComfyVideo = _adapter["ComfyVideo"]
+check_active = _adapter["check_active"]

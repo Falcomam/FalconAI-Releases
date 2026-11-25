@@ -7,6 +7,7 @@ on:
       - 'packaging/comfy_video.py'
       - 'packaging/video_workflow.py'
       - 'packaging/stage_shorts.py'
+      - 'packaging/tests/provision_windows_media.ps1'
       - 'packaging/developer_chat.py'
       - 'packaging/tests/test_shorts*.py'
       - '.github/workflows/validate-shorts.yml'
@@ -14,6 +15,7 @@ on:
 jobs:
   source-tests:
     strategy:
+      fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
@@ -26,7 +28,8 @@ jobs:
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
       - if: runner.os == 'Windows'
-        run: choco install ffmpeg -y --no-progress
+        shell: pwsh
+        run: ./packaging/tests/provision_windows_media.ps1
       - run: ffmpeg -version
       - run: ffprobe -version
       - run: python -m py_compile packaging/shorts_timing.py packaging/shorts_mode.py packaging/shorts_schedule.py packaging/shorts_visuals.py packaging/shorts_upload.py packaging/shorts_report.py packaging/developer_chat.py

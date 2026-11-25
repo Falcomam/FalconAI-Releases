@@ -80,7 +80,11 @@ class ComfyVideo:
             progress("Waiting for local video synthesis")
             while time.monotonic() < deadline:
                 check_active(stop, gaming)
-                entry = self.request("/history/" + prompt_id).get(prompt_id)
+                try:
+                    entry = self.request("/history/" + prompt_id).get(prompt_id)
+                except (OSError, TimeoutError) as exc:
+                    raise ConnectionError("Lost the local ComfyUI connection during generation. "
+                                          "Check the ComfyUI log and available memory.") from exc
                 if entry:
                     status = entry.get("status", {})
                     if status.get("status_str") == "error":

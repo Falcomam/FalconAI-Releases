@@ -35,12 +35,13 @@ jobs:
           python packaging/prepare_local_video.py --reconstruct
           python -m pip install -r build/Falcon_Ai_V14_4_Candidate/requirements.txt
           python -m compileall -q build/Falcon_Ai_V14_4_Candidate build/falcon_app_v144_runtime
+      - name: Install verified FFmpeg test tools
+        run: ./packaging/tests/provision_windows_media.ps1
       - name: Source, staged interface, browser, speech and real media tests
+        env:
+          FALCON_PAYHIP_BROWSER_SMOKE: '1'
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
-          if (!(Get-Command ffmpeg -ErrorAction SilentlyContinue) -or !(Get-Command ffprobe -ErrorAction SilentlyContinue)) {
-            choco install ffmpeg -y --no-progress
-          }
           ffmpeg -version
           ffprobe -version
           python -m playwright install chromium
@@ -67,7 +68,7 @@ jobs:
 
   real-model:
     runs-on: ubuntu-24.04
-    timeout-minutes: 55
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
         with:
@@ -85,7 +86,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+          sudo apt-get update -qq && sudo apt-get install -y ffmpeg espeak-ng
           python -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.9.1 torchvision==0.24.1 torchaudio==2.9.1
           python -m pip install --no-cache-dir -r comfy/requirements.txt 'transformers<5' 'comfy-aimdo==0.1.7'
           cd comfy/models
@@ -111,11 +112,14 @@ jobs:
             sleep 1
           done
           python packaging/tests/verify_ltx_clip.py --compact --output model-evidence
+          python packaging/tests/verify_ltx_short.py --output short-evidence
       - uses: actions/upload-artifact@v4
         with:
           name: ltx-2b-inference-evidence
           path: |
             model-evidence/*/draft.mp4
             model-evidence/*/verification.json
+            short-evidence/Falcon_LTX_Six_Scene_Short.mp4
+            short-evidence/verification.json
           if-no-files-found: error
           retention-days: 7

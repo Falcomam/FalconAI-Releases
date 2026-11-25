@@ -11,14 +11,28 @@ $helper = Join-Path $appDir '_internal\app_update_restart.ps1'
 $data = Join-Path $env:LOCALAPPDATA 'FalconAI'
 
 function Run-Checked($file, $arguments) {
+    Write-Host ("Starting " + [IO.Path]::GetFileName($file) + " " + ($arguments -join " "))
     $p = Start-Process -FilePath $file -ArgumentList $arguments -PassThru
-    if (!$p.WaitForExit(180000)) { $p.Kill(); throw "Timed out running $file" }
+    if (!$p.WaitForExit(180000)) {
+        $p.Refresh()
+        Write-Host ("Window title: " + $p.MainWindowTitle)
+        if ($p.MainWindowHandle -ne [IntPtr]::Zero) {
+            Add-Type -AssemblyName UIAutomationClient
+            $window = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
+            $visible = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+                [System.Windows.Automation.Condition]::TrueCondition)
+            $visible | Select-Object -First 15 | ForEach-Object { Write-Host $_.Current.Name }
+        }
+        $p.Kill()
+        throw "Timed out running $file $arguments"
+    }
     if ($p.ExitCode -ne 0) { throw "$file returned $($p.ExitCode)" }
 }
 
 function Test-Application($file) {
-    foreach ($flag in @('self','diagnostics-self','foundation-self','money-self','store-self','shorts-self')) {
-        Run-Checked $file "--falcon-$flag-test"
+    foreach ($flag in @('--falcon-self-test','--falcon-diagnostics-self-test','--falcon-foundation-self-test',
+                        '--falcon-money-self-test','--falcon-store-self-test','--falcon-shorts-self-test')) {
+        Run-Checked $file $flag
     }
     $report = Get-ChildItem (Join-Path $data 'v13_5_diagnostics') -Filter 'check_*.json' |
         Sort-Object LastWriteTime -Descending | Select-Object -First 1
@@ -29,8 +43,10 @@ function Test-Application($file) {
 }
 
 if ($Stage -eq 'freeze') {
+    $repo = (Resolve-Path '.').Path
     $argsList = @('--noconfirm','--clean','--windowed','--onedir','--name','Falcon Ai',
-        '--distpath','dist','--workpath','build/pyinstaller','--specpath','build/pyinstaller',
+        '--distpath',(Join-Path $repo 'dist'),'--workpath',(Join-Path $repo 'build/pyinstaller'),
+        '--specpath',(Join-Path $repo 'build/pyinstaller'),
         '--add-data',((Resolve-Path 'packaging/app_update_restart.ps1').Path + ';.'),
         '--add-data',($source + '\RELEASE_VERSION.txt;.'),
         '--add-data',($runtime + '\Falcon_Ai_Icon.png;.'),
@@ -41,8 +57,12 @@ if ($Stage -eq 'freeze') {
         $argsList += @('--add-data',($module.FullName + ';.'))
         if ($module.BaseName -ne 'sandbox_runner') { $argsList += "--hidden-import=$($module.BaseName)" }
     }
+    $previousPythonPath = $env:PYTHONPATH
     $env:PYTHONPATH = $source + [IO.Path]::PathSeparator + $runtime
-    python -m PyInstaller @argsList (Join-Path $runtime 'app_entry.py')
+    # Freeze from the staged application so checkout-only modules cannot shadow packaged modules.
+    Push-Location $source
+    try { python -P -m PyInstaller @argsList (Join-Path $runtime 'app_entry.py') }
+    finally { Pop-Location; $env:PYTHONPATH = $previousPythonPath }
     Test-Application (Resolve-Path 'dist/Falcon Ai/Falcon Ai.exe').Path
     return
 }

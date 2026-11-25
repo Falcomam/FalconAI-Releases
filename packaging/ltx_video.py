@@ -80,14 +80,20 @@ class LTXVideo:
     @classmethod
     def connect(cls, stop=lambda: False, gaming=lambda: False, *, client=None):
         media_tools()
+        incompatible = None
         for candidate in ([client] if client else [ComfyVideo(8188), ComfyVideo(8000)]):
             check_active(stop, gaming)
             try:
                 candidate.require_supported()
             except (urllib.error.URLError, ConnectionError, TimeoutError):
                 continue
+            except ValueError as exc:
+                incompatible = exc
+                continue
             break
         else:
+            if incompatible is not None:
+                raise incompatible
             raise ConnectionError("Start local ComfyUI on port 8188 or 8000, then choose Check LTX setup.")
         definitions = {}
         for node in build_workflow("setup", 0).values():
