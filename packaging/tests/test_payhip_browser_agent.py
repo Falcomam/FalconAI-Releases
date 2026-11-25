@@ -144,7 +144,7 @@ class BrowserSmoke(unittest.TestCase):
                  "/product/add": choice, "/product/new/digital": form,
                  "/product/edit/mock": saved}
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=True)
+            browser = playwright.chromium.launch(channel="chrome", headless=True)
             try:
                 page = browser.new_page()
                 page.route("https://payhip.com/**", lambda route: route.fulfill(
@@ -168,7 +168,7 @@ class BrowserSmoke(unittest.TestCase):
             self.skipTest("Optional real Chromium browser test not requested")
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            browser = p.chromium.launch(channel="chrome", headless=True)
             try:
                 page = browser.new_page()
                 page.goto("about:blank")
