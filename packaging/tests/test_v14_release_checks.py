@@ -35,6 +35,7 @@ class V14ReleaseContractTests(unittest.TestCase):
         self._source("improve_cycle.py", "blocked: packaged source-upgrade unsupported\n")
         self._runtime("app_updates.py", "CURRENT_VERSION = (14, 0, 0)\n")
         self._runtime("app_entry.py", "CURRENT_VERSION != (14, 0, 0)\n"
+                      "--falcon-foundation-self-test\n"
                       "--falcon-diagnostics-self-test\n"
                       "sys.modules['diagnostics'] = packaged_diagnostics\n")
         self._runtime("Falcon_Ai.iss", '#define MyAppVersion "14.0.0"\n'
