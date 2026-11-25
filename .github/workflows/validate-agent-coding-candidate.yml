@@ -1,0 +1,79 @@
+name: Validate Falcon project-aware coding agent (development only)
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/validate-agent-coding-candidate.yml"
+      - "packaging/project_coding_agent.py"
+      - "packaging/tests/test_project_coding_agent.py"
+      - "packaging/tests/test_project_agent_chat.py"
+      - "packaging/prepare_agent_coding_candidate.py"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: falcon-agent-coding-source-validation
+  cancel-in-progress: true
+jobs:
+  coding-agent:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run isolated bounded agent and security unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s packaging/tests -p test_project_coding_agent.py -v
+          python -m unittest discover -s packaging/tests -p test_project_targeted_edits.py -v
+          python -m unittest discover -s packaging/tests -p test_gaming_mode.py -v
+      - name: Reconstruct complete V14 Windows source and stage integrated agent
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install 'Pillow>=11.0'
+          for patch in v13.6 v13.6.1 v13.6.2 v13.6.3 v13.6.4 v13.6.5; do
+            python "patches/$patch/apply.py"
+          done
+          for script in \
+            prepare.py prepare_icon_release.py prepare_engine_candidate.py \
+            prepare_single_chat_candidate.py prepare_v138_release.py \
+            prepare_copy_reply_candidate.py prepare_command_palette_candidate.py \
+            prepare_web_quality_candidate.py prepare_project_revision_candidate.py \
+            prepare_project_browser_candidate.py prepare_next_bundle_windows.py \
+            prepare_project_search_candidate.py prepare_quiet_powershell_candidate.py \
+            prepare_packaged_health_candidate.py finalize_packaged_health_release.py \
+            prepare_v14_release_candidate.py prepare_agent_coding_candidate.py; do
+            python "packaging/$script"
+          done
+          python -m compileall -q build/Falcon_Ai_CodingAgent_Candidate
+          python - <<'PY'
+          from pathlib import Path
+          target=Path("build/Falcon_Ai_CodingAgent_Candidate")
+          chat=(target/"developer_chat.py").read_text(encoding="utf-8")
+          assert (target/"RELEASE_VERSION.txt").read_text().strip() == "14.0.0"
+          assert "project_coding_agent as coding_agent" in chat
+          assert 'self._agent_edit(*payload)' in chat
+          assert "/project agent " in chat
+          assert "gaming_mode.enabled()" in chat
+          assert "projects.review_proposal(plan)" in chat
+          assert (target/"project_coding_agent.py").is_file()
+          assert (target/"PROJECT_AGENT_DEVELOPMENT_ONLY.txt").is_file()
+          print("PASS: project-aware agent integrated with V14 reviewed-source UI")
+          PY
+      - name: Verify actual one-chat planning, diff, approval, STOP and commands
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s packaging/tests -p test_project_agent_chat.py -v
+          python -m unittest discover -s packaging/tests -p test_command_palette.py -v
+          python -m unittest discover -s packaging/tests -p test_project_targeted_chat.py -v
+          python -m unittest discover -s packaging/tests -p test_project_browser_chat.py -v
+          echo 'PASS: agent chat, source approval and prior shortcuts'
