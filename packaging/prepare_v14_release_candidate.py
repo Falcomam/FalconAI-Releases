@@ -84,6 +84,26 @@ def main():
                   "CURRENT_VERSION = (13, 9, 1)", "CURRENT_VERSION = (14, 0, 0)")
     replace_exact(RUNTIME / "app_entry.py",
                   "CURRENT_VERSION != (13, 9, 1)", "CURRENT_VERSION != (14, 0, 0)")
+    # Frozen self-test checks the actual V14 packaged foundation, not merely a
+    # loose source file. Does not launch GUI, make model requests or write data.
+    entry_path = RUNTIME / "app_entry.py"
+    entry_text = entry_path.read_text(encoding="utf-8")
+    gate = "    if '--falcon-diagnostics-self-test' in sys.argv:\n"
+    if entry_text.count(gate) != 1:
+        raise RuntimeError("Missing unique frozen health self-test entry anchor")
+    foundation_gate = (
+        "    if '--falcon-foundation-self-test' in sys.argv:\n"
+        "        import falcon_foundation\n"
+        "        from pathlib import Path\n"
+        "        version_file = Path(getattr(sys, '_MEIPASS', '')) / 'RELEASE_VERSION.txt'\n"
+        "        if (not falcon_foundation.check_contract() or\n"
+        "                version_file.read_text(encoding='utf-8').strip() != '14.0.0'):\n"
+        "            raise RuntimeError('V14 packaged foundation contract mismatch')\n"
+        "        print('FALCON V14 FOUNDATION PACKAGED CHECK PASSED')\n"
+        "        return 0\n"
+    )
+    entry_path.write_text(entry_text.replace(gate, foundation_gate + gate, 1),
+                          encoding="utf-8")
     replace_exact(RUNTIME / "Falcon_Ai.iss",
                   '#define MyAppVersion "13.9.1"',
                   '#define MyAppVersion "14.0.0"')
