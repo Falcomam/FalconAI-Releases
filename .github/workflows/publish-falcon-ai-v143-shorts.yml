@@ -4,6 +4,10 @@ on:
     branches: ['release/v14.3-money-mode']
     paths:
       - ".github/workflows/publish-falcon-ai-v143-shorts.yml"
+      - "packaging/prepare_v143_shorts_candidate.py"
+      - "packaging/stage_shorts.py"
+      - "packaging/shorts*.py"
+      - "packaging/tests/test_shorts*.py"
 permissions:
   contents: write
 concurrency:
@@ -317,8 +321,9 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
-          $existing=gh release view v14.3.0 --json tagName 2>$null
-          if ($LASTEXITCODE -eq 0 -and $existing) { throw 'V14.3.0 already exists; refusing overwrite' }
+          $existing=@(gh api repos/Falcomam/FalconAI-Releases/releases --paginate --jq '.[] | select(.tag_name == "v14.3.0") | .id')
+          if ($LASTEXITCODE -ne 0) { throw 'Could not verify release absence' }
+          if ($existing.Count -ne 0) { throw 'V14.3.0 draft or public release already exists; refusing overwrite' }
           $installer='output/Falcon_Ai_Setup.exe'
           $hash=(Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($hash -ne (Get-Content -LiteralPath 'output/Falcon_Ai_Setup.sha256' -Raw).Trim()) { throw 'Candidate digest changed' }
@@ -335,8 +340,17 @@ jobs:
           '@ | Set-Content -Encoding utf8 release_notes.txt
           gh release create v14.3.0 $installer --target $env:GITHUB_SHA --draft --title 'Falcon AI V14.3.0 - Shorts Money Mode' --notes-file release_notes.txt
           if ($LASTEXITCODE -ne 0) { throw 'Draft release creation failed' }
-          $remote=gh api repos/Falcomam/FalconAI-Releases/releases/tags/v14.3.0 --jq '.assets[] | select(.name == "Falcon_Ai_Setup.exe") | .digest'
-          if ($LASTEXITCODE -ne 0 -or -not $remote -or $remote.Trim().ToLowerInvariant() -ne ('sha256:'+$hash)) { throw 'Draft digest absent or different; do not publish' }
-          gh release edit v14.3.0 --draft=false --latest
+          $ids=@(gh api repos/Falcomam/FalconAI-Releases/releases --paginate --jq '.[] | select(.tag_name == "v14.3.0" and .draft == true) | .id')
+          if ($LASTEXITCODE -ne 0 -or $ids.Count -ne 1 -or $ids[0] -notmatch '^\d+
+) { throw 'Cannot uniquely identify draft release' }
+          $id=$ids[0]
+          $raw=gh api "repos/Falcomam/FalconAI-Releases/releases/$id"
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect draft release' }
+          $draft=$raw | ConvertFrom-Json
+          $assets=@($draft.assets | Where-Object { $_.name -eq 'Falcon_Ai_Setup.exe' })
+          if (-not $draft.draft -or $draft.tag_name -ne 'v14.3.0' -or $draft.target_commitish -ne $env:GITHUB_SHA -or $assets.Count -ne 1 -or $assets[0].digest -ne ('sha256:'+$hash)) { throw 'Draft identity or installer digest mismatch; do not publish' }
+          gh api --method PATCH "repos/Falcomam/FalconAI-Releases/releases/$id" -F draft=false -f make_latest=true --silent
           if ($LASTEXITCODE -ne 0) { throw 'Draft publication failed' }
+          $remote=gh api repos/Falcomam/FalconAI-Releases/releases/tags/v14.3.0 --jq '.assets[] | select(.name == "Falcon_Ai_Setup.exe") | .digest'
+          if ($LASTEXITCODE -ne 0 -or -not $remote -or $remote.Trim().ToLowerInvariant() -ne ('sha256:'+$hash)) { throw 'Public release digest verification failed' }
           Write-Host ('PASS: Falcon V14.3.0 published with verified SHA256 '+$hash)
