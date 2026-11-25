@@ -10,6 +10,13 @@ on:
       - "packaging/project_targeted_edits.py"
       - "packaging/tests/test_project_targeted_chat.py"
       - "packaging/prepare_single_chat_candidate.py"
+      - "packaging/gaming_mode.py"
+      - "packaging/site_design_check.py"
+      - "packaging/developer_chat.py"
+      - "packaging/developer_workspace.py"
+      - "packaging/command_palette.py"
+      - "packaging/tests/test_gaming_mode.py"
+      - "packaging/tests/test_site_design_check.py"
   workflow_dispatch:
 permissions:
   contents: read
@@ -69,6 +76,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Ollama manager tests failed' }
           foreach ($test in @(
             'test_message_copy.py','test_command_palette.py',
+            'test_gaming_mode.py','test_site_design_check.py',
             'test_html_quality.py','test_project_revision.py',
             'test_project_revision_chat.py','test_project_browser.py',
             'test_project_browser_chat.py')) {
@@ -88,7 +96,8 @@ jobs:
           assert (source/"NEXT_BUNDLE_TEST_CANDIDATE_ONLY.txt").exists()
           assert all((source/module).exists() for module in (
               "message_copy.py","command_palette.py","html_quality.py",
-              "project_revision.py","project_browser.py"))
+              "project_revision.py","project_browser.py",
+              "gaming_mode.py","site_design_check.py"))
           assert "CURRENT_VERSION = (13, 9, 0)" in (runtime/"app_updates.py").read_text()
           assert "CURRENT_VERSION != (13, 9, 0)" in (runtime/"app_entry.py").read_text()
           assert "MyAppVersion \"13.9.0\"" in (runtime/"Falcon_Ai.iss").read_text()
@@ -96,6 +105,9 @@ jobs:
           gui=(source/"falcon.py").read_text(encoding="utf-8")
           assert "self.dev_chat.dispatch(prompt)" in gui
           assert "self.dev_chat.stop()" in gui
+          assert "developer_chat.gaming_mode.enabled()" in gui
+          assert "Gaming Mode ON (free VRAM)" in gui
+          assert "import gaming_mode" in (source/"agent.py").read_text(encoding="utf-8")
           assert "message_copy.attach_copy_reply(" in gui
           assert "command_palette.EntryController(" in gui
           assert "engine_manager" in gui
