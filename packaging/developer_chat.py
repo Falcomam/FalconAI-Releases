@@ -15,6 +15,7 @@ import developer_generation
 import project_static_check
 import engine_manager
 import gaming_mode
+import falcon_foundation
 
 _PROJECT = re.compile(r"^/project(?:\s+(.*))?$", re.I | re.S)
 _ENGINE = re.compile(r"^/engine(?:\s+(.*))?$", re.I | re.S)
@@ -81,6 +82,8 @@ def route(text):
     if not isinstance(text, str):
         return None
     raw = text.strip()
+    if raw.casefold() in ("/foundation", "/foundation status", "/capabilities"):
+        return "foundation", ""
     match = _ENGINE.fullmatch(raw)
     if match:
         return "engine", (match.group(1) or "status").strip()
@@ -157,7 +160,11 @@ class ChatFeatures:
         if gaming_mode.enabled() and action in ("project_new", "project_edit", "project_edit_small"):
             self.say("Gaming Mode is ON. New AI project generation is paused to protect game performance. Type /engine gaming off to resume.")
             return True
-        if action == "engine":
+        if action == "foundation":
+            self.say(falcon_foundation.render_status(
+                gaming=gaming_mode.enabled(),
+                coding_model=engine_manager.saved_coding_model()))
+        elif action == "engine":
             self._engine(payload)
         elif action == "project_new":
             self._generate(*payload)
