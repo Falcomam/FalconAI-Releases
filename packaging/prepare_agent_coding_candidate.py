@@ -149,11 +149,11 @@ patch("developer_chat.py",
 # Enhanced new-project path: architecture first, then strict source generation.
 # This route is OPT-IN; existing /project website/python behavior is untouched.
 patch("developer_chat.py",
-      '    "/project map <saved_name>  •  /project agent <saved_name> <goal>\\n"\\n',
-      '    "/project map <saved_name>  •  /project agent <saved_name> <goal>\\n"\\n'
-      '    "/project architect <website|python|fabric_mod> <goal>\\n"\\n')
+      '    "/project map <saved_name>  •  /project agent <saved_name> <goal>\\n"\n',
+      '    "/project map <saved_name>  •  /project agent <saved_name> <goal>\\n"\n'
+      '    "/project architect <website|python|fabric_mod> <goal>\\n"\n')
 patch("developer_chat.py",
-      '        if rest.lower().startswith("map "):\\n',
+      '        if rest.lower().startswith("map "):\n',
       '''        if rest.lower().startswith("architect "):
             args = rest.split(None, 2)
             if len(args) == 3 and args[1] in projects.ALLOWED_KINDS and 8 <= len(args[2].strip()) <= 1100:
@@ -174,7 +174,7 @@ patch("developer_chat.py",
             self._architect_new(*payload)
 ''')
 patch("developer_chat.py",
-      "    def _map_saved(self, name):\\n",
+      "    def _map_saved(self, name):\n",
       '''    def _architect_new(self, kind, goal):
         if self.app.busy or self._running:
             self.say("Falcon is already working. Press STOP first.")
@@ -241,11 +241,11 @@ raw = raw.replace(
     1)
 palette.write_text(raw, encoding="utf-8")
 raw = palette.read_text(encoding="utf-8")
-mark = '        Command("Plan + edit a saved project (review first)", "/project agent "),\\n'
+mark = '        Command("Plan + edit a saved project (review first)", "/project agent "),\n'
 if raw.count(mark) != 1:
     raise RuntimeError("Architect new-project menu anchor changed")
 palette.write_text(raw.replace(
-    mark, mark + '        Command("Architect-first new project", "/project architect "),\\n', 1),
+    mark, mark + '        Command("Architect-first new project", "/project architect "),\n', 1),
     encoding="utf-8")
 
 (TARGET / "PROJECT_AGENT_DEVELOPMENT_ONLY.txt").write_text(
