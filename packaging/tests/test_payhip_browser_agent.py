@@ -131,7 +131,7 @@ class BrowserSmoke(unittest.TestCase):
         <form id="product" onsubmit="event.preventDefault();document.body.textContent='Product created successfully'">
          <label>Upload product file <input name="productFile" type="file" accept=".zip"></label>
          <label>Product title <input name="productName" type="text"></label>
-         <label>Price <input type="number" name="price"></label>
+         <label>Price <input type="number" step="0.01" name="price"></label>
          <label>Cover image <input name="coverImage" type="file" accept="image/png"></label>
          <label>Description <textarea name="description"></textarea></label>
          <label><input type="radio" name="visibility" value="Visible" checked>Visible</label>
