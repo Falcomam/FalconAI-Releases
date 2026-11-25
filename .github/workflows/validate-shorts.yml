@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - 'packaging/shorts*.py'
+      - 'packaging/developer_chat.py'
       - 'packaging/tests/test_shorts*.py'
       - '.github/workflows/validate-shorts.yml'
   workflow_dispatch:
@@ -24,5 +25,5 @@ jobs:
         run: choco install ffmpeg -y --no-progress
       - run: ffmpeg -version
       - run: ffprobe -version
-      - run: python -m py_compile packaging/shorts_timing.py packaging/shorts_mode.py packaging/shorts_schedule.py packaging/shorts_visuals.py packaging/shorts_upload.py
+      - run: python -m py_compile packaging/shorts_timing.py packaging/shorts_mode.py packaging/shorts_schedule.py packaging/shorts_visuals.py packaging/shorts_upload.py packaging/shorts_report.py packaging/developer_chat.py
       - run: python -m unittest discover -s packaging/tests -p "test_shorts*.py" -v
