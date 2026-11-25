@@ -30,13 +30,18 @@ def report(root=ROOT, day=None, *, gaming=False):
         except (OSError, ValueError, AttributeError):
             upload="Unreadable upload receipt; check YouTube Studio"
     missing=[name for name in ("ffmpeg","ffprobe","powershell.exe") if not shutil.which(name)]
+    try:
+        automatic=json.loads((root/"shorts_preferences.json").read_text(encoding="utf-8")).get("daily_drafts") is True
+    except (OSError, ValueError, AttributeError):
+        automatic=False
     lines=["FALCON MONEY MODE — DAILY SHORTS REPORT",
            "Date: "+day.isoformat(), "Daily target: 1 original brainrot Short",
            "Draft: "+state, "YouTube: "+upload,
            "Gaming Mode: "+("ON (paused)" if gaming else "OFF"),
            "STOP: "+("Active" if (root/"shorts"/"STOP").exists() else "Not active"),
            "Media tools: "+("Missing "+", ".join(missing) if missing else "Found on PATH"),
-           "Schedule: proposed 4 PM preparation / 6 PM publication; unattended publishing not enabled.",
+           "Daily drafts: "+("ON (4 PM or later while Falcon is open)" if automatic else "OFF"),
+           "Publication: target 6 PM; unattended publishing not enabled.",
            "Draft folder: "+str(folder),
            "Next action: "+("Review today's video." if state=="Video ready for review" else
                             "Check the status above before using /shorts draft."),
