@@ -1,5 +1,16 @@
 # Falcon AI — engineering instructions for future coding sprints
 
+## OVERRIDING OWNER PRIORITY: Falcon Money Mode (set 2026-11-24)
+
+**Number-one priority over all optional/new features:** turn Falcon into a practical, free-first Fiverr-business assistant that helps the owner earn revenue by making **client-ready websites, original AI graphics and customer-service automation projects**, and by organizing the owner's customer work. This prioritization overrides the older generic feature ordering and cosmetic/UI ideas below. It does not override security safeguards, preserving a working app, STOP, data retention, legal/platform restrictions or required release validation.
+
+**Next actionable development deliverable:** implement a fully local **Customer Order Assistant** in Falcon's existing purple chat. It should accept a manually provided client brief; capture requested work, quoted price (only if supplied), customer requirements, deadlines, revisions and missing details; maintain privacy-safe local state; draft personalized responses; and show the reviewable deliverable checklist. Do not auto-contact Fiverr clients or scrape orders.
+
+**Then:** build a tested customer-service **FAQ chatbot template** to sell to approved clients (grounded in their supplied FAQs; safe unknown-answer/human-handoff behavior); significantly improve responsive website generation/preview/test/fix quality; then support licensed original artwork with free local tooling. Make practical cross-feature improvements only when they unblock this priority (e.g. web research, retrieval memory, bounded browser preview, file operations).
+
+**Business reality:** no claims of automatic earnings, guaranteed sales, zero-cost always-on hosting or a functional Fiverr connection unless verified. Protect customers' data; use platform-native auto-replies and human approval for messaging, deliveries, account or financial actions. Defer low-value redesigns and generic slash-commands unless they directly serve a working customer deliverable.
+
+
 The owner wants Falcon to become a capable, gaming-friendly **local Windows assistant
 and software-development agent**. Work in the real repository and make tested
 commits, not fictional releases. GPT-6 can implement Falcon through tools but

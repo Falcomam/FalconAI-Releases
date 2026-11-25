@@ -1,5 +1,22 @@
 # Falcon Ai — Consolidated development backlog (2026-11-24)
 
+## HIGHEST PRIORITY — Falcon Money Mode (owner request, 2026-11-24)
+
+This supersedes the relative priority of all previously listed *feature-development* backlog items. Preserve non-negotiable security, STOP, packaging integrity, and current-user data. See `FALCON_MONEY_MODE_CUSTOMER_AUTOMATION.md`.
+
+**Why:** owner wants Falcon to help earn real money from Fiverr services: custom websites, original AI art and customer automation for businesses, with screen understanding and minimal repetitive prompts for routine actions.
+
+**Do these tasks first, in order:**
+
+1. **Local Customer Order Assistant MVP in existing Falcon chat:** import owner-provided sanitized order brief, extract deliverables/requirements, quote only provided price, ask about missing details, maintain deadline/revision checklist, draft client replies without sending them, persist/remove project state privately. Tests: no real Fiverr access or unauthorized outbound calls, sanitized local data, restart recall, correct scope, cancellation.
+2. **Demo customer-service automation product:** FAQ/chatbot website template based only on client-supplied facts, clear human handoff for unsupported questions, optional approved lead-intake with visitor consent, simple offline reproducible tests and installation guide. Keep client API secrets out of code/logs.
+3. **Website quality:** substantially improve AI design prompts; render and inspect real desktop/mobile previews with Playwright in an isolated context; verify navigation; review and fix source with backups, STOP and appropriate code-execution approval.
+4. **Original AI graphics offer:** evaluate freely licensed local image-generation tooling for RTX 4060; produce legally usable custom assets; verify commercial licensing and actual output quality before listing a service.
+5. **Workflow + research/memory:** support research-backed client briefs and grounded source-linked memory that is reversible, private and refreshable; routine local file/browser preview actions low-friction only within granted scope. No scraping, mass messaging, unauthenticated Fiverr bot, uploads or auto-delivery.
+
+**Release order:** source-only branch/tests → CI → Windows frozen EXE/installer/upgrade verification → trusted public release; no unfinished feature claims. Real clients, sales, revenue and hosting costs cannot be promised.
+
+
 ## Falcon focused-edit and approval sprint — 2026-11-24
 
 **User direction:** substantial coding batches, one purple chat, no per-commit alerts or GitHub manual checking, preserve working installed Falcon V13.9.1 until a full trusted release.

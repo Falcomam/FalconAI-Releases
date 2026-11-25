@@ -1,0 +1,32 @@
+name: Browser-smoke Falcon customer FAQ demonstration
+on:
+  pull_request:
+    paths:
+      - "packaging/customer_faq.py"
+      - "packaging/tests/test_customer_faq_browser.py"
+      - ".github/workflows/validate-money-faq-browser.yml"
+  push:
+    branches: [main]
+    paths:
+      - "packaging/customer_faq.py"
+      - "packaging/tests/test_customer_faq_browser.py"
+      - ".github/workflows/validate-money-faq-browser.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  actual-browser-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install real Chromium browser runner
+        run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Render and interact with generated FAQ site
+        run: |
+          python -m unittest discover -s packaging/tests -p test_customer_faq_browser.py -v
