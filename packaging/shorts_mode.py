@@ -10,6 +10,8 @@ from pathlib import Path
 import re
 import subprocess
 import urllib.request
+import time
+from shorts_schedule import due
 from shorts_timing import distinct_story, scene_frames, timeline, FPS
 from shorts_visuals import render_scene, SETTINGS, ACTIONS
 
@@ -72,10 +74,10 @@ def run(cmd, cwd):
                 try: p.wait(timeout=5)
                 except subprocess.TimeoutExpired: p.kill(); p.wait()
 
-def create(model):
+def create(model, day=None):
     check_pause()
     OUT.mkdir(parents=True,exist_ok=True)
-    folder=OUT/dt.date.today().isoformat()
+    folder=OUT/(day or dt.date.today()).isoformat()
     # Atomic directory reservation prevents concurrent duplicate drafts.
     folder.mkdir(exist_ok=False)
     try:
@@ -124,5 +126,18 @@ $s.Dispose()
 if __name__=="__main__":
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("--model",default="qwen3:4b")
+    p.add_argument("--watch",action="store_true",help="Explicitly run the local draft scheduler while this process stays open")
+    p.add_argument("--prepare-hour",type=int,default=16,choices=range(24))
     args=p.parse_args()
-    print(create(args.model))
+    if not args.watch:
+        print(create(args.model))
+    else:
+        print("Daily local draft watch active; Ctrl+C exits. No automatic uploads.",flush=True)
+        while True:
+            now=dt.datetime.now().astimezone()
+            if due(now,OUT,enabled=True,paused=paused() or (OUT/"STOP").exists(),hour=args.prepare_hour):
+                try:
+                    print(create(args.model,now.date()),flush=True)
+                except Exception as exc:
+                    print("Draft attempt failed: "+type(exc).__name__,flush=True)
+            time.sleep(60)
