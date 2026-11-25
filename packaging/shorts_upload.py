@@ -77,11 +77,13 @@ def upload(service, folder, expected_channel, body, approved_digest, media_facto
     request=service.videos().insert(part="snippet,status",body=body,
                                     media_body=media_factory(str(path)))
     response=None
-    while response is None:
+    for _ in range(2048):
+        if response is not None:
+            break
         if paused():
             raise RuntimeError("Paused during upload; reconcile in YouTube Studio")
         _,response=request.next_chunk(num_retries=0)
-    if not response.get("id"):
+    if not isinstance(response,dict) or not response.get("id"):
         raise RuntimeError("Missing upload receipt; reconcile in YouTube Studio")
     receipt={"state":"uploaded","video_id":response["id"],"channel":expected_channel,
              "sha256":approved_digest}
@@ -125,10 +127,16 @@ def main():
     category=input("Category ID (e.g. 23 for comedy): ")
     if kids not in ("yes","no") or synthetic not in ("yes","no"):
         raise ValueError("Explicit yes/no required")
-    body=metadata(title,description,visibility,kids=="yes",synthetic=="yes",category)
+    publish_at=None
+    if visibility=="private":
+        raw=input("Optional future publication time (ISO 8601 with UTC offset), or blank: ").strip()
+        if raw:
+            publish_at=dt.datetime.fromisoformat(raw)
+    body=metadata(title,description,visibility,kids=="yes",synthetic=="yes",category,publish_at)
     print(json.dumps(body,indent=2))
     if input("Certify that this exact video complies with YouTube Community Guidelines and you have rights to all assets. Type CERTIFY: ")!="CERTIFY":
         return
+    print("By clicking 'upload,' you certify that the content you are uploading complies with the YouTube Terms of Service (including the YouTube Community Guidelines) at https://www.youtube.com/t/terms. Please be sure not to violate others' copyright or privacy rights.")
     if input("Type UPLOAD to send the reviewed video to this channel now: ")!="UPLOAD":
         return
     result=upload(service,folder,channel_id,body,review_hash,
