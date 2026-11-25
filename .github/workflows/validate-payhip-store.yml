@@ -14,6 +14,8 @@ on:
       - "packaging/prepare_agent_coding_candidate.py"
       - ".github/workflows/validate-payhip-store.yml"
       - "packaging/payhip_store.py"
+      - "packaging/payhip_browser_agent.py"
+      - "packaging/tests/test_payhip_browser_agent.py"
       - "packaging/website_preview.py"
       - "packaging/prepare_v142_store_candidate.py"
       - "packaging/tests/test_payhip_store.py"
@@ -29,6 +31,9 @@ on:
       - "packaging/prepare_money_mode_candidate.py"
       - "packaging/prepare_agent_coding_candidate.py"
       - ".github/workflows/validate-money-mode.yml"
+      - "packaging/payhip_browser_agent.py"
+      - "packaging/tests/test_payhip_browser_agent.py"
+      - ".github/workflows/validate-payhip-store.yml"
   workflow_dispatch:
 permissions:
   contents: read
@@ -52,6 +57,7 @@ jobs:
           python -m unittest discover -s packaging/tests -p test_money_integrations.py -v
           python -m unittest discover -s packaging/tests -p test_customer_faq.py -v
           python -m unittest discover -s packaging/tests -p test_payhip_store.py -v
+          python -m unittest discover -s packaging/tests -p test_payhip_browser_agent.py -v
           python -m unittest discover -s packaging/tests -p test_website_preview.py -v
           python -m compileall -q packaging/payhip_store.py packaging/website_preview.py packaging/prepare_v142_store_candidate.py
   staged-chat:
@@ -94,7 +100,30 @@ jobs:
           sys.path.insert(0, str(Path("build/Falcon_Ai_V14_2_Candidate").resolve()))
           import developer_chat as d
           assert d.route("/money payhip") == ("money_mode", "payhip")
+          assert d.route("/money payhip autopilot") == ("money_mode", "payhip autopilot")
+          assert "playwright" in (Path("build/Falcon_Ai_V14_2_Candidate") / "requirements.txt").read_text().lower()
+          assert (Path("build/Falcon_Ai_V14_2_Candidate")/"payhip_browser_agent.py").exists()
           assert d.route("/project preview falcon_faq_demo") == ("project_preview", "falcon_faq_demo")
           assert "payhip_store" in (Path("build/Falcon_Ai_V14_2_Candidate") / "developer_chat.py").read_text()
           print("Falcon Payhip and browser preview routes confirmed")
           PY
+  browser-simulation:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install free local browser driver
+        shell: pwsh
+        run: |
+          python -m pip install playwright==1.56.0
+          if ($LASTEXITCODE -ne 0) { throw "Playwright unavailable" }
+      - name: Test real Chrome clicks, upload and invisible-only save against offline Payhip simulation
+        shell: pwsh
+        env:
+          FALCON_PAYHIP_BROWSER_SMOKE: "1"
+        run: |
+          python -m unittest discover -s packaging/tests -p test_payhip_browser_agent.py -v
+          if ($LASTEXITCODE -ne 0) { throw "Playwright simulated Payhip browser test failed" }
