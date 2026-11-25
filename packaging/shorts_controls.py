@@ -58,6 +58,7 @@ class MoneyControls:
             bar=tk.Menu(self.window)
             self.window.configure(menu=bar)
         self.menu=tk.Menu(bar,tearoff=False)
+        self.menu.add_command(label="Check local AI video engine",command=self.check_ai_video)
         self.menu.add_command(label="Daily report",command=features._shorts_status)
         self.menu.add_command(label="Generate today's video",command=features._shorts_draft)
         self.menu.add_command(label="Preview today's video",command=self.preview)
@@ -71,6 +72,25 @@ class MoneyControls:
         self.menu.add_command(label="Pause daily generation and stop current work",command=self.pause)
         bar.add_cascade(label="Money Mode",menu=self.menu)
         self.window.after(10000,self.tick)
+
+    def check_ai_video(self):
+        import threading
+        from comfy_video import ComfyVideo
+        from queue import Queue, Empty
+        results=Queue()
+        def worker():
+            try:
+                ComfyVideo().available()
+                results.put("Local ComfyUI is reachable. Video workflow and GPU compatibility are not yet verified.")
+            except Exception as exc:
+                results.put("Local ComfyUI unavailable: "+str(exc))
+        def poll():
+            try:
+                self.features.say(results.get_nowait())
+            except Empty:
+                self.window.after(200,poll)
+        threading.Thread(target=worker,daemon=True).start()
+        self.window.after(200,poll)
 
     def toggle(self):
         try:
