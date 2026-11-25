@@ -22,9 +22,9 @@ MAX_DRAFT_BYTES = 10_000
 PRODUCT = {
     "status": "DRAFT—ARTWORK NOT YET CREATED OR VERIFIED",
     "title": "Midnight Falcon — Purple Gaming Wallpapers Vol. 1",
-    "suggested_price_usd": "9.99",
+    "suggested_price_usd": "4.99",
     "category": "Digital wallpapers",
-    "format": "Ten original 2560 × 1440 PNG desktop wallpapers (target; NOT yet included)",
+    "format": "Three original 2560 × 1440 PNG desktop wallpapers (target; NOT yet included)",
     "keywords": ["purple gaming wallpapers", "dark fantasy wallpaper",
                  "desktop backgrounds", "cyberpunk", "falcon art"],
     "description": (
@@ -35,16 +35,9 @@ PRODUCT = {
         "Files and exact resolution must be verified before publishing."
     ),
     "planned_artworks": [
-        "Violet futuristic night city with glowing rooflines",
-        "Dark purple mountains under a rich starfield",
-        "Peregrine falcon silhouette with nebula wings",
-        "Purple aurora above a still alpine lake",
-        "Neon falcon emblem surrounded by subtle energy",
-        "Cosmic ruins with distant violet moons",
-        "Minimal geometric purple waves and stars",
-        "Moody forest illuminated by purple fireflies",
-        "Rain-soaked cyberpunk street in violet light",
-        "Falcon flight above a cloud sea at midnight",
+        "Violet futuristic skyline with a soaring falcon",
+        "Purple aurora above an alpine lake",
+        "Cosmic falcon silhouette against a nebula",
     ],
     "rights_check": (
         "Confirm every output model/assets' commercial licensing and originality. "
@@ -59,7 +52,7 @@ PRODUCT = {
     "pending_owner_actions": [
         "Create/sign in to a personal Payhip seller account",
         "Connect and verify a supported payment processor in Payhip",
-        "Review and approve ten original, commercially usable PNGs",
+        "Review and approve three original, commercially usable PNGs",
         "Upload product ZIP and cover previews in the Payhip web dashboard",
         "Verify price, policies, refund terms and test checkout before publishing",
     ],
@@ -117,8 +110,8 @@ def prepare_first_product(*, root=ROOT):
             stream.write(record)
         text = (
             "# Midnight Falcon — Wallpaper Pack Vol. 1\n\n"
-            "**DRAFT ONLY. No art files have been generated or verified here.**\n\n"
-            "Price idea: $9.99. Artwork target: ten 2560 × 1440 original PNGs.\n"
+            "**DRAFT ONLY. This local workspace contains product metadata, not the customer image ZIP.**\n\n"
+            "Price idea: $4.99. Artwork target: three 2560 × 1440 original PNGs.\n"
             "Generate and review each artwork first, confirm commercial-use "
             "rights, then create a customer ZIP. Do not upload this draft as "
             "a finished product.\n\n"
