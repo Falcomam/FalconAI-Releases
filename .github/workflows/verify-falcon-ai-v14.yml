@@ -152,6 +152,8 @@ jobs:
           if ($test.ExitCode -ne 0) { throw ('Frozen self-test failed: ' + $test.ExitCode) }
           $health = Start-Process -FilePath $exe -ArgumentList '--falcon-diagnostics-self-test' -PassThru -Wait
           if ($health.ExitCode -ne 0) { throw 'Packaged diagnostics failed' }
+          $foundation = Start-Process -FilePath $exe -ArgumentList '--falcon-foundation-self-test' -PassThru -Wait
+          if ($foundation.ExitCode -ne 0) { throw 'Frozen V14 foundation self-test failed' }
           $folder = Join-Path $env:LOCALAPPDATA 'FalconAI\v13_5_diagnostics'
           $report = Get-ChildItem -LiteralPath $folder -Filter 'check_*.json' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $report) { throw 'Packaged report missing' }
@@ -180,6 +182,8 @@ jobs:
           }
           $q = Start-Process -FilePath $installed -ArgumentList '--falcon-self-test' -PassThru -Wait
           if ($q.ExitCode -ne 0) { throw 'Clean installed EXE self-test failed' }
+          $foundation = Start-Process -FilePath $installed -ArgumentList '--falcon-foundation-self-test' -PassThru -Wait
+          if ($foundation.ExitCode -ne 0) { throw 'Clean installed V14 foundation self-test failed' }
           $version = Join-Path $env:LOCALAPPDATA 'Programs\Falcon Ai\_internal\RELEASE_VERSION.txt'
           if ((Get-Content -LiteralPath $version -Raw).Trim() -ne '14.0.0') { throw 'Incorrect installed version' }
           Write-Host 'PASS: clean install and Windows EXE self-test'
@@ -245,6 +249,8 @@ jobs:
           }
           $selftest = Start-Process -FilePath $exe -ArgumentList '--falcon-self-test' -PassThru -Wait
           if ($selftest.ExitCode -ne 0) { throw 'Upgraded Windows app self-test failed' }
+          $foundation = Start-Process -FilePath $exe -ArgumentList '--falcon-foundation-self-test' -PassThru -Wait
+          if ($foundation.ExitCode -ne 0) { throw 'Upgraded V14 foundation self-test failed' }
           Write-Host 'PASS: verified 13.9.1 -> 14.0.0, auto-reopened Falcon Ai, preserved user data'
       - name: No publish after passing all V14 Windows installer checks
         shell: pwsh
