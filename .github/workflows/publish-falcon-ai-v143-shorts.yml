@@ -341,8 +341,7 @@ jobs:
           gh release create v14.3.0 $installer --target $env:GITHUB_SHA --draft --title 'Falcon AI V14.3.0 - Shorts Money Mode' --notes-file release_notes.txt
           if ($LASTEXITCODE -ne 0) { throw 'Draft release creation failed' }
           $ids=@(gh api repos/Falcomam/FalconAI-Releases/releases --paginate --jq '.[] | select(.tag_name == "v14.3.0" and .draft == true) | .id')
-          if ($LASTEXITCODE -ne 0 -or $ids.Count -ne 1 -or $ids[0] -notmatch '^\d+
-) { throw 'Cannot uniquely identify draft release' }
+          if ($LASTEXITCODE -ne 0 -or $ids.Count -ne 1 -or $ids[0] -notmatch '^[0-9]+$') { throw 'Cannot uniquely identify draft release' }
           $id=$ids[0]
           $raw=gh api "repos/Falcomam/FalconAI-Releases/releases/$id"
           if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect draft release' }
