@@ -32,8 +32,8 @@ class MoneyChatIntegrationTests(unittest.TestCase):
 
     def test_money_route_stays_in_existing_chat(self):
         self.assertEqual(chat.route("/money list"), ("money_mode", "list"))
-        self.assertEqual(chat.route("/money seller falconant"),
-                         ("money_mode", "seller falconant"))
+        self.assertEqual(chat.route("/money seller demo_seller"),
+                         ("money_mode", "seller demo_seller"))
         self.assertEqual(chat.route("/money faq-demo"), ("money_mode", "faq-demo"))
         with patch.object(chat.money_mode, "handle_command", return_value="done") as work:
             self.assertTrue(self.features.dispatch("/money list"))
