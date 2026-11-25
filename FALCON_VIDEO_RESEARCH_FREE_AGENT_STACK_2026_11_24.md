@@ -63,7 +63,7 @@ This is a source review, **not** a claim that I watched and independently inspec
 Indexed supporting video summaries:
 - https://localhosted.com/videos/local-deep-research-windows-setup-with-ollama
 - https://localhosted.com/videos/opencode-setup-ollama-skills-and-mcp-for-coding
-- https://localhosted.com/videos/open code-2-0-tutorial-setup-and-local-models-with-ollama (use YouTube link above; this human-readable path is non-canonical)
+- https://localhosted.com/videos/opencode-2-0-tutorial-setup-and-local-models-with-ollama
 - https://localhosted.com/videos/local-deep-research-plus-ollama-docker-setup-tutorial
 
 ## Concrete Falcon integration sequence
