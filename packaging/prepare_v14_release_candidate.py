@@ -77,6 +77,14 @@ def main():
 
     from stage_shorts import stage_shorts
     stage_shorts(REPO / "packaging", TARGET)
+    requirements = TARGET / "requirements.txt"
+    req_text = requirements.read_text(encoding="utf-8")
+    for dependency in ("google-api-python-client>=2.150,<3",
+                       "google-auth-oauthlib>=1.2,<2",
+                       "google-auth-httplib2>=0.2,<1"):
+        if dependency not in req_text.splitlines():
+            req_text = req_text.rstrip() + "\n" + dependency + "\n"
+    requirements.write_text(req_text, encoding="utf-8")
 
     replace_visible_versions(TARGET / "falcon.py")
     replace_visible_versions(TARGET / "falcon_launcher.py")
@@ -97,6 +105,12 @@ def main():
     foundation_gate = (
         "    if '--falcon-foundation-self-test' in sys.argv:\n"
         "        import falcon_foundation\n"
+        "        import shorts_mode, shorts_controls, shorts_publish_ui, shorts_report\n"
+        "        import google_auth_oauthlib.flow, googleapiclient.discovery, google_auth_httplib2\n"
+        "        from shorts_publish_ui import plan_upload\n"
+        "        plan = plan_upload('Fixture', '', 'private', 'no', 'no', '23', '', True, True)\n"
+        "        if plan['status']['privacyStatus'] != 'private':\n"
+        "            raise RuntimeError('Frozen Shorts metadata check failed')\n"
         "        from pathlib import Path\n"
         "        version_file = Path(getattr(sys, '_MEIPASS', '')) / 'RELEASE_VERSION.txt'\n"
         "        if (not falcon_foundation.check_contract() or\n"
