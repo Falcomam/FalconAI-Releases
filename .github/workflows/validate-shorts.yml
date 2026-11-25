@@ -1,0 +1,21 @@
+name: Verify Falcon Shorts source
+on:
+  push:
+    paths:
+      - 'packaging/shorts*.py'
+      - 'packaging/tests/test_shorts*.py'
+      - '.github/workflows/validate-shorts.yml'
+  workflow_dispatch:
+jobs:
+  source-tests:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m py_compile packaging/shorts_timing.py packaging/shorts_mode.py
+      - run: python -m unittest discover -s packaging/tests -p "test_shorts*.py" -v
