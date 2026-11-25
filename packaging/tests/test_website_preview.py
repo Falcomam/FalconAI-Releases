@@ -18,7 +18,7 @@ class WebsitePreviewTests(unittest.TestCase):
         website = {
             "name": "lostfalcon_site", "kind": "website",
             "files": {"index.html": (
-                "<!DOCTYPE html><html><head><meta charset="UTF-8"><title>LostFalcon</title>"
+                "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>LostFalcon</title>"
                 "</head><body><main><h1>Hi</h1></main></body></html>"),
                 "README.md": "Local preview"},
         }
