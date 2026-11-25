@@ -16,6 +16,7 @@ if TARGET.exists():
 shutil.copytree(SOURCE, TARGET, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".venv"))
 shutil.copy2(ROOT / "packaging" / "money_mode.py", TARGET / "money_mode.py")
 shutil.copy2(ROOT / "packaging" / "customer_faq.py", TARGET / "customer_faq.py")
+shutil.copy2(ROOT / "packaging" / "money_integrations.py", TARGET / "money_integrations.py")
 
 
 def patch(name, old, new):
@@ -30,7 +31,7 @@ def patch(name, old, new):
 
 patch("developer_chat.py",
       "import project_coding_agent as coding_agent\n",
-      "import project_coding_agent as coding_agent\nimport money_mode\nimport customer_faq\n")
+      "import project_coding_agent as coding_agent\nimport money_mode\nimport customer_faq\nimport money_integrations\n")
 patch("developer_chat.py",
       "_ENGINE = re.compile(",
       '_MONEY = re.compile(r"^/money(?:\\s+(.*))?$", re.I | re.S)\n_ENGINE = re.compile(')
@@ -55,6 +56,67 @@ patch("developer_chat.py",
       '''    def _money(self, payload):
         if self.app.busy or self._running:
             self.say("Falcon is busy. Finish or press STOP before changing Money Mode orders.")
+            return
+        arguments = payload.split()
+        if arguments[:1] == ["connect"]:
+            if len(arguments) != 3:
+                self.say("Use /money connect n8n|activepieces <local_127.0.0.1_webhook_URL>")
+                return
+            try:
+                url = money_integrations.set_endpoint(arguments[1], arguments[2])
+            except (OSError, money_integrations.ConnectorError) as exc:
+                self.say("Money Mode connection rejected: " + str(exc)[:230])
+                return
+            self.say("Saved optional local " + arguments[1] +
+                     " workflow endpoint. No workflow was run or data sent.")
+            return
+        if arguments[:1] == ["integrations"]:
+            try:
+                installed = money_integrations.load_endpoints()
+                self.say("LOCAL WORKFLOW WEBHOOKS: " +
+                         (", ".join(sorted(installed)) if installed else "none configured") +
+                         ". OpenHands check: /money openhands-status. "
+                         "No paid API or Fiverr account connection is enabled.")
+            except (OSError, money_integrations.ConnectorError) as exc:
+                self.say("Cannot read local integrations: " + str(exc)[:220])
+            return
+        if arguments[:1] == ["disconnect"]:
+            if len(arguments) != 2:
+                self.say("Use /money disconnect n8n|activepieces")
+                return
+            try:
+                removed = money_integrations.remove_endpoint(arguments[1])
+                self.say("Local workflow endpoint " + ("removed." if removed else "was not configured."))
+            except (OSError, money_integrations.ConnectorError) as exc:
+                self.say("Could not remove endpoint: " + str(exc)[:230])
+            return
+        if arguments == ["openhands-status"]:
+            try:
+                check = money_integrations.probe_openhands()
+                self.say("OpenHands Agent Server: " +
+                         ("local service online" if check["online"] else "not connected") +
+                         ". " + check["reason"])
+            except (OSError, money_integrations.ConnectorError) as exc:
+                self.say("OpenHands check failed: " + str(exc)[:200])
+            return
+        if arguments[:1] == ["run"]:
+            if len(arguments) != 4 or arguments[3] != "CONFIRM":
+                self.say("Use /money run <order_id> n8n|activepieces CONFIRM. "
+                         "This sends only the order ID, service and brief to an "
+                         "owner-configured LOCAL workflow. It may trigger external actions "
+                         "if your workflow is configured to do that.")
+                return
+            try:
+                order = money_mode.get_order(arguments[1])
+                status = money_integrations.invoke_workflow(
+                    arguments[2], order, confirmed=True)
+            except (OSError, money_mode.MoneyError,
+                    money_integrations.ConnectorError) as exc:
+                self.say("Local workflow did not complete: " + str(exc)[:240])
+                return
+            self.say("LOCAL WORKFLOW: " + status["provider"] +
+                     " accepted HTTP " + str(status["status"]) +
+                     ". Downstream task execution was NOT verified.")
             return
         if payload.casefold() == "faq-demo":
             if self.pending:
@@ -96,7 +158,8 @@ raw = raw.replace(
     '        Command("Money Mode: new client order", "/money new "),\n'
     '        Command("Money Mode: saved orders", "/money list"),\n'
     '        Command("Money Mode: tools and handoffs", "/money tools"),\n'
-    '        Command("Money Mode: example client FAQ site", "/money faq-demo"),\n', 1)
+    '        Command("Money Mode: example client FAQ site", "/money faq-demo"),\n'
+    '        Command("Money Mode: local workflow integrations", "/money integrations"),\n', 1)
 palette.write_text(raw, encoding="utf-8")
 (TARGET / "MONEY_MODE_DEVELOPMENT_ONLY.txt").write_text(
     "Private local customer order tracking and draft/handoff foundation only.\n"
