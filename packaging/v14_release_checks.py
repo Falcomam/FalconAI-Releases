@@ -11,7 +11,7 @@ import re
 VERSION = "14.0.0"
 UPDATE_TUPLE = "(14, 0, 0)"
 REQUIRED = (
-    "falcon.py", "falcon_launcher.py", "release_updates.py",
+    "falcon.py", "falcon_launcher.py", "agent.py", "release_updates.py",
     "falcon_foundation.py", "developer_chat.py", "developer_workspace.py",
     "developer_generation.py", "engine_manager.py",
     "gaming_mode.py", "site_design_check.py", "html_quality.py",
