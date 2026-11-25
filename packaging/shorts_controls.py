@@ -64,6 +64,8 @@ class MoneyControls:
         from shorts_publish_ui import PublishUI
         self.publisher=PublishUI(self)
         self.menu.add_command(label="Review and upload to YouTube",command=self.publisher.start)
+        self.menu.add_command(label="Open YouTube Studio (manual upload)",command=self.manual_upload)
+        self.menu.add_command(label="Get FFmpeg media tools",command=self.media_help)
         self.menu.add_checkbutton(label="Generate daily at 4 PM while Falcon is open",
                                    variable=self.choice,command=self.toggle)
         self.menu.add_command(label="Pause daily generation and stop current work",command=self.pause)
@@ -95,6 +97,43 @@ class MoneyControls:
             os.startfile(str(path))
         except (OSError,AttributeError):
             self.features.say("Could not open the video with the Windows default player.")
+
+    def media_help(self):
+        import webbrowser
+        webbrowser.open("https://ffmpeg.org/download.html")
+        self.features.say("Install FFmpeg and ffprobe from a trusted distribution linked there, then restart Falcon. No software was installed by Falcon.")
+
+    def manual_upload(self):
+        from tkinter import messagebox
+        import webbrowser
+        if self.features.app.busy or self.features._running or self.review_active:
+            self.features.say("Finish current work before starting a manual upload.")
+            return
+        self.review_active=True
+        try:
+            video=ready_video(self.root)
+            if video is None:
+                self.features.say("No completed video ready for manual upload.")
+                return
+            ledger=video.parent/"upload_attempt.json"
+            if ledger.exists():
+                self.features.say("An upload or handoff was already recorded. Check YouTube Studio before uploading anything.")
+                webbrowser.open("https://studio.youtube.com/")
+                return
+            if not messagebox.askyesno("Manual YouTube handoff",
+                    "Open the draft folder and YouTube Studio? You must watch the video, check rights and the correct channel, and choose audience, disclosure and visibility in Studio. This records a manual handoff and blocks Falcon's API upload for this draft to prevent duplicates. It does not upload anything.",
+                    parent=self.window):
+                return
+            # Same exclusive ledger as API upload; only one route may reserve it.
+            with ledger.open("x",encoding="utf-8") as out:
+                json.dump({"state":"manual_handoff","file":"draft.mp4"},out)
+            os.startfile(str(video.parent))
+            webbrowser.open("https://studio.youtube.com/")
+            self.features.say("Manual handoff recorded. No upload performed by Falcon. Check Studio for final status. Video: "+str(video))
+        except (OSError,AttributeError):
+            self.features.say("Could not complete the manual handoff. Check the draft folder and YouTube Studio before trying another upload.")
+        finally:
+            self.review_active=False
 
     def tick(self):
         try:
