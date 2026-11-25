@@ -158,7 +158,8 @@ class BrowserSmoke(unittest.TestCase):
                      "cover": assets / agent.COVER_FILENAME},
                     requester=None)
                 self.assertEqual(result["status"], "invisible_product_save_submitted")
-                self.assertTrue(result["url"].endswith("/product/edit/mock"))
+                from urllib.parse import urlsplit
+                self.assertEqual(urlsplit(result["url"]).path, "/product/edit/mock")
             finally:
                 browser.close()
 
