@@ -208,10 +208,15 @@ class CodingAgentTests(unittest.TestCase):
             "files": ["index.html", "README.md"],
             "acceptance": ["Verify page loads and navigation works"],
         }
+        valid_html = ('<!doctype html><html lang="en"><head>'
+                      '<meta charset="UTF-8"><title>LostFalcon</title>'
+                      '<meta name="viewport" content="width=device-width, initial-scale=1">'
+                      '</head><body><main><h1>LostFalcon</h1></main>'
+                      '</body></html>')
         for generated_files in (
-            {"index.html": "<html><body>Missing README</body></html>"},
-            {"index.html": "<html></html>", "README.md": "Read me",
-             "secrets.txt": "Unexpected extra file"},
+            {"index.html": valid_html},
+            {"index.html": valid_html, "README.md": "Read me",
+             "extra.txt": "Unexpected extra file"},
         ):
             with self.subTest(files=list(generated_files)):
                 model = MockModel([
