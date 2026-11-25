@@ -104,8 +104,8 @@ $s.Dispose()
             scene = story["scenes"][i]
             render_scene(key,i,scene["setting"],scene["action"],folder/f"art{i}.png")
             run(["ffmpeg","-nostdin","-y","-loop","1","-framerate",str(FPS),"-i",f"art{i}.png",
-                 "-vf","scale=1440:2560,zoompan=z=1.04+0.0004*on:x=iw/2-iw/zoom/2:y=ih/2-ih/zoom/2:d=1:s=720x1280:fps=30",
                  "-i",f"voice{i}.wav","-map","0:v","-map","1:a",
+                 "-vf","scale=1440:2560,zoompan=z=1.04+0.0004*on:x=iw/2-iw/zoom/2:y=ih/2-ih/zoom/2:d=1:s=720x1280:fps=30",
                  "-af","apad","-t",f"{count/FPS:.6f}","-c:v","libx264",
                  "-preset","veryfast","-pix_fmt","yuv420p","-c:a","aac",
                  "-ar","48000","-ac","1",f"scene{i}.mp4"],folder)
