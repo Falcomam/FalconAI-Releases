@@ -146,6 +146,86 @@ patch("developer_chat.py",
     def _edit_small(self, name, goal):
 ''')
 
+# Enhanced new-project path: architecture first, then strict source generation.
+# This route is OPT-IN; existing /project website/python behavior is untouched.
+patch("developer_chat.py",
+      '    "/project map <saved_name>  •  /project agent <saved_name> <goal>\\n"\\n',
+      '    "/project map <saved_name>  •  /project agent <saved_name> <goal>\\n"\\n'
+      '    "/project architect <website|python|fabric_mod> <goal>\\n"\\n')
+patch("developer_chat.py",
+      '        if rest.lower().startswith("map "):\\n',
+      '''        if rest.lower().startswith("architect "):
+            args = rest.split(None, 2)
+            if len(args) == 3 and args[1] in projects.ALLOWED_KINDS and 8 <= len(args[2].strip()) <= 1100:
+                return "project_architect", (args[1], args[2].strip())
+            return "project_help", ""
+        if rest.lower().startswith("map "):
+''')
+patch("developer_chat.py",
+      '("project_new", "project_edit", "project_edit_small", "project_agent")',
+      '("project_new", "project_edit", "project_edit_small", "project_agent", "project_architect")')
+patch("developer_chat.py",
+      '''        elif action == "project_agent":
+            self._agent_edit(*payload)
+''',
+      '''        elif action == "project_agent":
+            self._agent_edit(*payload)
+        elif action == "project_architect":
+            self._architect_new(*payload)
+''')
+patch("developer_chat.py",
+      "    def _map_saved(self, name):\\n",
+      '''    def _architect_new(self, kind, goal):
+        if self.app.busy or self._running:
+            self.say("Falcon is already working. Press STOP first.")
+            return
+        if self.pending:
+            self.say("Review or reject the pending project before starting another.")
+            return
+        try:
+            proposal_messages(kind, goal)  # Existing length/kind validation.
+        except projects.ProjectError as exc:
+            self.say("Cannot prepare architect: " + str(exc)[:250])
+            return
+
+        def work(cancel):
+            status = engine_manager.probe(timeout=3)
+            if not status["online"]:
+                raise RuntimeError("Ollama is offline. Type /engine start.")
+            coder = engine_manager.saved_coding_model()
+            chat = engine_manager.saved_chat_model()
+            model = coder if coder in status["models"] else chat
+            if model not in status["models"]:
+                raise RuntimeError("Neither coding nor chat model is installed. Type /engine list.")
+            if cancel.is_set():
+                return None
+            import agent
+            return coding_agent.generate_new_project_with_architect(
+                kind, goal, model=model, cancel=cancel, ask=agent.ask_ollama)
+
+        def complete(output):
+            if output is None:
+                return
+            plan = output["plan"]
+            self.pending = {"plan": plan, "review": output["review"],
+                            "reviewed": False}
+            self.opened = None
+            review = output["review"]
+            warnings = review.get("quality_warnings", ())
+            self.app.set_status("Ready • Architect project proposal")
+            self.say("Architect-first source project ready (NOT saved, executed, or tested).\\n"
+                     "Architecture: " + output["blueprint"]["summary"] +
+                     "\\nPlanned features: " + "; ".join(output["blueprint"]["features"]) +
+                     "\\nProposed files: " + ", ".join(review["files"]) +
+                     ("\\nStatic quality warnings: " + "; ".join(warnings) if warnings else "") +
+                     "\\nUse /project review to read the complete source, "
+                     "/project approve to save after full review, or /project reject.")
+
+        self._launch("Architecting and generating source locally…", work, complete)
+
+    def _map_saved(self, name):
+''')
+
 # Expose discoverable user-facing shortcuts in the *existing* Commands menu.
 # Only inserts commands into the chat textbox. Existing completion order is
 # preserved by appending to the end of the Coding & Projects group.
@@ -160,6 +240,13 @@ raw = raw.replace(
     '        Command("Plan + edit a saved project (review first)", "/project agent "),\n',
     1)
 palette.write_text(raw, encoding="utf-8")
+raw = palette.read_text(encoding="utf-8")
+mark = '        Command("Plan + edit a saved project (review first)", "/project agent "),\\n'
+if raw.count(mark) != 1:
+    raise RuntimeError("Architect new-project menu anchor changed")
+palette.write_text(raw.replace(
+    mark, mark + '        Command("Architect-first new project", "/project architect "),\\n', 1),
+    encoding="utf-8")
 
 (TARGET / "PROJECT_AGENT_DEVELOPMENT_ONLY.txt").write_text(
     "Local two-stage read-only architect and targeted source editor. "
