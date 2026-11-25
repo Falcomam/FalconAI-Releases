@@ -10,6 +10,7 @@ MODULES = (
     "shorts_timing.py", "shorts_schedule.py", "shorts_visuals.py",
     "shorts_upload.py", "shorts_mode.py", "shorts_report.py",
     "shorts_controls.py", "shorts_publish_ui.py",
+    "comfy_video.py", "video_workflow.py", "ltx_video.py",
 )
 
 def stage_shorts(source, target):

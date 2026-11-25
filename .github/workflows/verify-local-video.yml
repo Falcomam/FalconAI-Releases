@@ -1,0 +1,121 @@
+name: Falcon 14.4 local video candidate
+on:
+  push:
+    branches: [feature/local-ai-video]
+    paths:
+      - 'packaging/**'
+      - '.github/workflows/verify-local-video.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: local-video-verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      PYTHONUTF8: '1'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Reconstruct the complete candidate from the release stages
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          python -m pip install pyinstaller==6.16.0 "Pillow>=11"
+          python packaging/prepare_local_video.py --reconstruct
+          python -m pip install -r build/Falcon_Ai_V14_4_Candidate/requirements.txt
+          python -m compileall -q build/Falcon_Ai_V14_4_Candidate build/falcon_app_v144_runtime
+      - name: Source, staged interface, browser, speech and real media tests
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          if (!(Get-Command ffmpeg -ErrorAction SilentlyContinue) -or !(Get-Command ffprobe -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg -y --no-progress
+          }
+          ffmpeg -version
+          ffprobe -version
+          python -m playwright install chromium
+          foreach ($suite in (Get-ChildItem packaging/tests/test_*.py)) {
+            python -m unittest discover -s packaging/tests -p $suite.Name -v
+          }
+      - name: Freeze and verify Windows executable and 13 diagnostics
+        run: ./packaging/verify_local_video_windows.ps1 freeze
+      - name: Compile Inno installer and test clean installation
+        run: ./packaging/verify_local_video_windows.ps1 install
+      - name: Upgrade trusted public 14.3.2, relaunch and verify local data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./packaging/verify_local_video_windows.ps1 upgrade
+      - uses: actions/upload-artifact@v4
+        with:
+          name: falcon-14.4.0-windows-candidate
+          path: |
+            output/Falcon_Ai_Setup.exe
+            output/Falcon_Ai_Setup.sha256
+            output/SOURCE_COMMIT.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  real-model:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: Comfy-Org/ComfyUI
+          ref: cb459573c8fa025bbf9ecf312f6af376d659f567
+          path: comfy
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Provision the isolated CPU model test
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+          python -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.9.1 torchvision==0.24.1 torchaudio==2.9.1
+          python -m pip install --no-cache-dir -r comfy/requirements.txt 'transformers<5' 'comfy-aimdo==0.1.7'
+          cd comfy/models
+          curl -fsSL --retry 3 -o checkpoints/ltx-video-2b-v0.9.5.safetensors https://huggingface.co/Lightricks/LTX-Video/resolve/main/ltx-video-2b-v0.9.5.safetensors
+          curl -fsSL --retry 3 -o text_encoders/t5xxl_fp8_e4m3fn.safetensors https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn.safetensors
+          sha256sum --check <<'HASHES'
+          720d15c9f19f7d0f6b2a92bbbc34410e2cfb2f6856a100b38f734fbf973d4adf  checkpoints/ltx-video-2b-v0.9.5.safetensors
+          7d330da4816157540d6bb7838bf63a0f02f573fc48ca4d8de34bb0cbfd514f09  text_encoders/t5xxl_fp8_e4m3fn.safetensors
+          HASHES
+      - name: Generate and decode an original clip through Falcon's production adapter
+        shell: bash
+        env:
+          OMP_NUM_THREADS: '4'
+          MKL_NUM_THREADS: '4'
+        run: |
+          set -euo pipefail
+          python comfy/main.py --cpu --fp8_e4m3fn-unet --fp8_e4m3fn-text-enc --bf16-vae --listen 127.0.0.1 --disable-api-nodes --disable-all-custom-nodes --disable-metadata --cache-none > "$RUNNER_TEMP/comfy.log" 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true; tail -c 5000 "$RUNNER_TEMP/comfy.log"' EXIT
+          for attempt in {1..90}; do
+            if curl -fsS http://127.0.0.1:8188/system_stats > /dev/null 2>&1; then break; fi
+            kill -0 "$server"
+            sleep 1
+          done
+          python packaging/tests/verify_ltx_clip.py --compact --output model-evidence
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ltx-2b-inference-evidence
+          path: |
+            model-evidence/*/draft.mp4
+            model-evidence/*/verification.json
+          if-no-files-found: error
+          retention-days: 7

@@ -1,6 +1,6 @@
 """Falcon Shorts prototype: one local draft per calendar day, no auto-publish.
 Run with Python 3.10+, Ollama, Windows PowerShell, and FFmpeg on PATH.
-No credentials or generated code are executed. Procedural cartoons are original artwork, not generative AI video. Pillow is required.
+Daily visuals use the selected local renderer. LTX uses ComfyUI; illustrated drafts use Pillow.
 """
 import argparse
 from contextvars import ContextVar
@@ -11,6 +11,8 @@ from pathlib import Path
 import re
 import subprocess
 import urllib.request
+import urllib.error
+import socket
 import time
 import shutil
 from shorts_upload import probe
@@ -35,29 +37,123 @@ def check_pause():
     if (cancel is not None and cancel.is_set()) or paused() or (OUT / "STOP").exists():
         raise RuntimeError("Shorts paused by Gaming Mode or STOP")
 
+SHORTS_MODEL = "qwen3:4b-instruct-2507-q4_K_M"
+
+def preferred_story_model(selected, installed):
+    # A separate non-thinking writer, without changing the user's main chat model.
+    if SHORTS_MODEL in installed:
+        return SHORTS_MODEL
+    if "qwen3:4b-instruct" in installed:
+        return "qwen3:4b-instruct"
+    return selected
+
+def install_story_model(cancel):
+    """Pull only the fixed official writer after UI confirmation; no shell."""
+    import engine_manager
+    state = engine_manager.probe(timeout=3)
+    if not state["online"]:
+        raise RuntimeError("Start Ollama using Tools > AI Engine first.")
+    if preferred_story_model("", state["models"]):
+        return "Shorts writer already installed."
+    exe = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs/Ollama/ollama.exe"
+    if not exe.is_file():
+        raise RuntimeError("Official Ollama installation not found. Open the Ollama app to install "+SHORTS_MODEL)
+    env = dict(os.environ, OLLAMA_HOST="http://127.0.0.1:11434")
+    if cancel.is_set() or paused():
+        raise RuntimeError("Model download paused.")
+    with subprocess.Popen([str(exe), "pull", SHORTS_MODEL], cwd=str(exe.parent),
+                          env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                          stderr=subprocess.DEVNULL, creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0)) as proc:
+        deadline = time.monotonic() + 3600
+        try:
+            while proc.poll() is None:
+                if cancel.is_set() or paused() or time.monotonic() > deadline:
+                    raise RuntimeError("Writer download stopped or timed out.")
+                time.sleep(.5)
+            if proc.returncode:
+                raise RuntimeError("Ollama could not download the writer. Check network and available disk space.")
+        finally:
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+    if not preferred_story_model("", engine_manager.probe(timeout=3)["models"]):
+        raise RuntimeError("Download finished, but Ollama did not report the writer installed.")
+    return "Shorts writer installed. Generate today's video."
+
+def story_schema():
+    return {
+        "type": "object", "required": ["title", "lines", "scenes"],
+        "additionalProperties": False,
+        "properties": {
+            "title": {"type": "string", "minLength": 1, "maxLength": 90},
+            "lines": {"type": "array", "minItems": 6, "maxItems": 6,
+                      "items": {"type": "string", "minLength": 1, "maxLength": 120}},
+            "scenes": {"type": "array", "minItems": 6, "maxItems": 6,
+                       "items": {"type": "object", "required": ["setting", "action"],
+                                 "additionalProperties": False, "properties": {
+                                     "setting": {"enum": sorted(SETTINGS)},
+                                     "action": {"enum": sorted(ACTIONS)}}}}
+        }
+    }
+
 def script(model):
     check_pause()
     prompt = ("Write a completely original absurdist comedy microstory for a brainrot-style Short. Invent a surreal fictional object-animal character, give it a ridiculous goal, escalate with unexpected visual gags, and end with a surprising punchline. "
               "Return JSON with title and lines (exactly 6 short sentences, "
-              "each 8-16 words), and scenes (exactly 6 objects each with setting and action). Settings: kitchen, city, moon, gym, ocean, desert, office. Actions: stand, jump, run, panic, celebrate, fall. Match each visual to its narration. Strong hook, rapid escalation, funny payoff. Vary the premise and setting. Do not imitate existing meme characters or voices. "
+              "each 8-14 words), and scenes (exactly 6 objects each with setting and action). Settings: kitchen, city, moon, gym, ocean, desert, office. Actions: stand, jump, run, panic, celebrate, fall. Match each visual to its narration. Strong hook, rapid escalation, funny payoff. Vary the premise and setting. Do not imitate existing meme characters or voices. "
               "No real people, copyrighted characters, or factual claims.")
-    req = urllib.request.Request("http://127.0.0.1:11434/api/generate",
-        data=json.dumps(dict(model=model, prompt=prompt, stream=False, format="json")).encode(),
-        headers={"Content-Type":"application/json"})
-    with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=120) as r:
-        raw = r.read(128001)
-    if len(raw)>128000:
-        raise ValueError("Model response too large")
-    obj = json.loads(json.loads(raw)["response"])
-    title, lines = obj["title"], obj["lines"]
-    if not isinstance(title,str) or not 1<=len(title)<=90 or not isinstance(lines,list) or len(lines)!=6:
+    for attempt in range(3):
+        check_pause()
+        try:
+            req = urllib.request.Request("http://127.0.0.1:11434/api/generate",
+                data=json.dumps(dict(model=model, prompt=prompt, stream=False, think=False, format=story_schema(), keep_alive=0, options={"num_ctx":4096,"num_predict":1024,"temperature":0.55})).encode(),
+                headers={"Content-Type":"application/json"})
+            with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=120) as r:
+                raw = r.read(128001)
+            if len(raw)>128000:
+                raise ValueError("Model response too large")
+            result = json.loads(raw)
+            if result.get("done_reason") == "length":
+                raise ValueError("Narration hit the generation budget")
+            return validate_story(json.loads(result["response"]))
+        except urllib.error.HTTPError as exc:
+            if exc.code not in (429, 500, 502, 503, 504):
+                raise RuntimeError(f"Ollama HTTP {exc.code}; check selected model in AI Engine.") from None
+            if attempt == 2:
+                raise RuntimeError(f"Ollama HTTP {exc.code} after three bounded attempts. Use Money Mode > Install Shorts writer; no upload occurred.") from None
+        except (urllib.error.URLError, TimeoutError, socket.timeout):
+            if attempt == 2:
+                raise RuntimeError("Local Ollama unavailable or timed out after three attempts. No upload occurred.") from None
+        except (ValueError, KeyError, TypeError, AttributeError):
+            if attempt == 2:
+                raise ValueError("Qwen returned invalid narration or scenes three times. Use Money Mode > Install Shorts writer if not installed. No video was uploaded.") from None
+            prompt += " Repair the output: six plain English narration sentences, 6-18 words each, no emoji or markup, six valid scene objects."
+    raise AssertionError("Unreachable")
+
+def validate_story(obj):
+    if not isinstance(obj, dict):
         raise ValueError("Invalid story structure")
-    if any(not isinstance(x,str) or not 8<=len(x.split())<=16 or len(x)>120 or not re.fullmatch(r"[A-Za-z0-9 ,.!?'\-]+",x) for x in lines):
-        raise ValueError("Invalid story lines; retry")
+    title, lines = obj.get("title"), obj.get("lines")
+    if not isinstance(title,str) or not 1<=len(title.strip())<=90 or not isinstance(lines,list) or len(lines)!=6:
+        raise ValueError("Invalid story structure")
+    clean = []
+    punctuation = str.maketrans({"’":"'","‘":"'","“":"","”":"","—":"-","–":"-","…":"...","\"":"",";":",",":":","})
+    for line in lines:
+        if not isinstance(line,str):
+            raise ValueError("Invalid story line type")
+        line = " ".join(line.translate(punctuation).split())
+        if not 6<=len(line.split())<=18 or not re.fullmatch(r"[A-Za-z0-9 ,.!?'\-]{1,120}",line):
+            raise ValueError("Invalid story lines")
+        clean.append(line)
     scenes = obj.get("scenes")
     if not isinstance(scenes,list) or len(scenes)!=6 or any(not isinstance(s,dict) or s.get("setting") not in SETTINGS or s.get("action") not in ACTIONS for s in scenes):
-        raise ValueError("Invalid scene choices; retry")
-    return {"title":title, "lines":lines, "scenes":scenes}
+        raise ValueError("Invalid scene choices")
+    return {"title":title.strip(), "lines":clean, "scenes":scenes}
+
 
 def run(cmd, cwd):
     check_pause()
@@ -84,16 +180,31 @@ def preflight():
     if missing:
         raise RuntimeError("Required tools not found on PATH: " + ", ".join(missing))
 
-def render_video(folder, story, key, frames):
+def render_video(folder, story, key, frames, *, ltx=None, progress=lambda message: None):
     """Render existing six voice WAV files; reusable by offline integration tests."""
     (folder/"captions.srt").write_text(timeline(story["lines"],frames),encoding="utf-8")
     for i, count in enumerate(frames):
         check_pause()
         scene = story["scenes"][i]
-        render_scene(key,i,scene["setting"],scene["action"],folder/f"art{i}.png")
-        run(["ffmpeg","-nostdin","-y","-loop","1","-framerate",str(FPS),"-i",f"art{i}.png",
-             "-i",f"voice{i}.wav","-map","0:v","-map","1:a",
-             "-vf","scale=1440:2560,zoompan=z=1.04+0.0004*on:x=iw/2-iw/zoom/2:y=ih/2-ih/zoom/2:d=1:s=720x1280:fps=30",
+        if ltx is None:
+            render_scene(key,i,scene["setting"],scene["action"],folder/f"art{i}.png")
+            visual = ["-loop","1","-framerate",str(FPS),"-i",f"art{i}.png"]
+            video_filter = "scale=1440:2560,zoompan=z=1.04+0.0004*on:x=iw/2-iw/zoom/2:y=ih/2-ih/zoom/2:d=1:s=720x1280:fps=30"
+        else:
+            import ltx_video
+            cancel = _CANCEL.get()
+            stop = lambda: (cancel is not None and cancel.is_set()) or (OUT/"STOP").exists()
+            clip = folder / f"ltx{i}.mp4"
+            progress(f"Generating LTX scene {i+1} of 6")
+            ltx.render(ltx_video.scene_prompt(story, i), clip, stop, paused,
+                       seed=(int(key[:15], 16) + i))
+            visual = ["-i", clip.name]
+            speed = (count - 1) * ltx_video.FPS / ((ltx_video.FRAMES - 1) * FPS)
+            video_filter = (f"setpts={speed:.9f}*PTS,fps={FPS},scale=720:1280:"
+                            "force_original_aspect_ratio=increase,crop=720:1280,setsar=1,"
+                            "tpad=stop_mode=clone:stop_duration=1")
+        run(["ffmpeg","-nostdin","-y",*visual,
+             "-i",f"voice{i}.wav","-map","0:v","-map","1:a","-vf",video_filter,
              "-af","apad","-t",f"{count/FPS:.6f}","-c:v","libx264",
              "-preset","veryfast","-pix_fmt","yuv420p","-c:a","aac",
              "-ar","48000","-ac","1",f"scene{i}.mp4"],folder)
@@ -108,20 +219,36 @@ def render_video(folder, story, key, frames):
         raise ValueError("Rendered duration differs from narration timeline")
     return duration
 
-def create(model, day=None, *, cancel=None):
+def create(model, day=None, *, cancel=None, progress=lambda message: None):
     """Run in an existing app worker; cancellation is scoped to that worker."""
     token = _CANCEL.set(cancel)
     try:
-        return _create(model, day)
+        return _create(model, day, progress)
     finally:
         _CANCEL.reset(token)
 
-def _create(model, day=None):
+def _create(model, day, progress):
     check_pause()
     preflight()
+    import ltx_video
+    ltx = None
+    if ltx_video.daily_enabled(ROOT):
+        cancel = _CANCEL.get()
+        progress("Checking local LTX setup")
+        ltx = ltx_video.LTXVideo.connect(
+            lambda: (cancel is not None and cancel.is_set()) or (OUT/"STOP").exists(), paused)
     OUT.mkdir(parents=True,exist_ok=True)
     folder=OUT/(day or dt.date.today()).isoformat()
     # Atomic directory reservation prevents concurrent duplicate drafts.
+    if (folder.is_dir() and not folder.is_symlink() and
+            folder.resolve().parent == OUT.resolve() and
+            (folder/"FAILED.txt").is_file() and
+            not (folder/"REVIEW_REQUIRED.txt").exists() and
+            not (folder/"upload_attempt.json").exists()):
+        # Preserve failed work; only incomplete, never-reviewed attempts qualify.
+        import uuid
+        archive = OUT / (".failed-" + folder.name + "-" + uuid.uuid4().hex)
+        folder.rename(archive)
     folder.mkdir(exist_ok=False)
     try:
         story=script(model)
@@ -129,24 +256,25 @@ def _create(model, day=None):
         key = distinct_story(story, OUT, folder)
         (folder/"story.json").write_text(json.dumps(story,indent=2),encoding="utf-8")
         # One actual speech recording per scene, not guessed timing.
-        (folder/"speak.ps1").write_text("""Add-Type -AssemblyName System.Speech
+        speech_command = """$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Speech
 $s=New-Object System.Speech.Synthesis.SpeechSynthesizer
 $s.Rate=-1
 $s.SetOutputToWaveFile((Join-Path (Get-Location) 'voice.wav'))
 $s.Speak([IO.File]::ReadAllText((Join-Path (Get-Location) 'narration.txt')))
 $s.Dispose()
-""",encoding="utf-8")
+"""
         frames = []
         for i, line in enumerate(story["lines"]):
             check_pause()
             (folder/"narration.txt").write_text(line,encoding="utf-8")
-            run(["powershell.exe","-NoProfile","-NonInteractive","-File","speak.ps1"],folder)
+            run(["powershell.exe","-NoProfile","-NonInteractive","-Command",speech_command],folder)
             voice = folder / f"voice{i}.wav"
             (folder/"voice.wav").replace(voice)
             frames.append(scene_frames(voice))
-        render_video(folder, story, key, frames)
+        render_video(folder, story, key, frames, ltx=ltx, progress=progress)
         check_pause()
-        (folder/"REVIEW_REQUIRED.txt").write_text("Private local draft. Review audio, duration, originality, imagery and disclosure before uploading. No upload performed.",encoding="utf-8")
+        (folder/"REVIEW_REQUIRED.txt").write_text(("LTX-Video 2B" if ltx else "Illustrated") + " local draft. Review audio, duration, originality, imagery and disclosure before uploading.", encoding="utf-8")
         return folder
     except BaseException:
         (folder/"FAILED.txt").write_text("Incomplete draft. Inspect before manually removing this folder to retry.",encoding="utf-8")

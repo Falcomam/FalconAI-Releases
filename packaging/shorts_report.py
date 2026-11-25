@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+from ltx_video import daily_enabled
 
 ROOT = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "FalconAI"
 
@@ -39,6 +40,7 @@ def report(root=ROOT, day=None, *, gaming=False):
     lines=["FALCON MONEY MODE — DAILY SHORTS REPORT",
            "Date: "+day.isoformat(), "Daily target: 1 original brainrot Short",
            "Draft: "+state, "YouTube: "+upload,
+           "Daily visuals: "+("LTX-Video 2B" if daily_enabled(root) else "Illustrated"),
            "Gaming Mode: "+("ON (paused)" if gaming else "OFF"),
            "STOP: "+("Active" if (root/"shorts"/"STOP").exists() else "Not active"),
            "Media tools: "+("Missing "+", ".join(missing) if missing else "Found on PATH"),

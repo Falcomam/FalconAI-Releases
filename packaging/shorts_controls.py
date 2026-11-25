@@ -11,6 +11,7 @@ import tempfile
 import tkinter as tk
 from shorts_schedule import due
 from shorts_report import ROOT
+import ltx_video
 
 def enabled(root=ROOT):
     try:
@@ -58,7 +59,13 @@ class MoneyControls:
             bar=tk.Menu(self.window)
             self.window.configure(menu=bar)
         self.menu=tk.Menu(bar,tearoff=False)
-        self.menu.add_command(label="Check local AI video engine",command=self.check_ai_video)
+        self.ltx_choice = tk.BooleanVar(master=self.window, value=ltx_video.daily_enabled(self.root))
+        self.menu.add_command(label="Generate LTX preview clip…", command=self.generate_clip)
+        self.menu.add_command(label="Play latest LTX preview", command=self.preview_clip)
+        self.menu.add_command(label="Check LTX setup", command=self.check_ai_video)
+        self.menu.add_command(label="LTX setup guide", command=self.ltx_help)
+        self.menu.add_checkbutton(label="Use LTX-Video for daily drafts", variable=self.ltx_choice,
+                                  command=self.toggle_ltx)
         self.menu.add_command(label="Daily report",command=features._shorts_status)
         self.menu.add_command(label="Generate today's video",command=features._shorts_draft)
         self.menu.add_command(label="Preview today's video",command=self.preview)
@@ -66,6 +73,7 @@ class MoneyControls:
         self.publisher=PublishUI(self)
         self.menu.add_command(label="Review and upload to YouTube",command=self.publisher.start)
         self.menu.add_command(label="Open YouTube Studio (manual upload)",command=self.manual_upload)
+        self.menu.add_command(label="Install Shorts writer",command=self.install_writer)
         self.menu.add_command(label="Get FFmpeg media tools",command=self.media_help)
         self.menu.add_checkbutton(label="Generate daily at 4 PM while Falcon is open",
                                    variable=self.choice,command=self.toggle)
@@ -73,24 +81,85 @@ class MoneyControls:
         bar.add_cascade(label="Money Mode",menu=self.menu)
         self.window.after(10000,self.tick)
 
+    def ltx_help(self):
+        import webbrowser
+        webbrowser.open("https://github.com/Falcomam/FalconAI-Releases/blob/feature/local-ai-video/FALCON_SHORTS_SPRINT.md#local-ltx-video")
+
+    def toggle_ltx(self):
+        try:
+            ltx_video.set_daily(self.ltx_choice.get(), self.root)
+        except OSError:
+            self.ltx_choice.set(ltx_video.daily_enabled(self.root))
+            self.features.say("Could not save the daily video renderer.")
+            return
+        mode = "LTX-Video 2B" if self.ltx_choice.get() else "illustrated visuals"
+        self.features.say("Daily drafts will use " + mode + ".")
+
+    def _video_work(self, prompt):
+        from shorts_mode import paused
+        def work(cancel):
+            stop = lambda: cancel.is_set() or (self.root / "shorts" / "STOP").exists()
+            try:
+                engine = ltx_video.LTXVideo.connect(stop, paused)
+                if prompt is None:
+                    return True, f"Local LTX setup found. Models: {engine.checkpoint}, {engine.encoder}."
+                path = engine.render(prompt, self.root / "ltx-previews", stop, paused, preview=True,
+                                     progress=lambda message: self.video_status(cancel, message))
+                return True, "LTX preview ready. Choose Play latest LTX preview in Money Mode.\n" + str(path)
+            except (OSError, ValueError, RuntimeError) as exc:
+                return False, str(exc)[:360]
+        def complete(result):
+            ok, detail = result
+            self.features.app.set_status("Ready • LTX-Video" if ok else "LTX-Video needs attention")
+            self.features.say(detail)
+        self.features._launch("Generating LTX preview…" if prompt else "Checking local LTX setup…",
+                              work, complete)
+
+    def video_status(self, cancel, message):
+        def update():
+            if self.features._event is cancel and not cancel.is_set():
+                self.features.app.set_status(message)
+        self.window.after(0, update)
+
     def check_ai_video(self):
-        import threading
-        from comfy_video import ComfyVideo
-        from queue import Queue, Empty
-        results=Queue()
-        def worker():
+        self._video_work(None)
+
+    def generate_clip(self, prompt=None):
+        from tkinter import simpledialog
+        from shorts_mode import paused
+        if self.features.app.busy or self.features._running or self.review_active:
+            self.features.say("Finish the current task before generating a preview.")
+            return
+        if paused() or (self.root / "shorts" / "STOP").exists():
+            self.features.say("Local video is paused by STOP or Gaming Mode.")
+            return
+        if prompt is None:
+            self.review_active = True
             try:
-                ComfyVideo().available()
-                results.put("Local ComfyUI is reachable. Video workflow and GPU compatibility are not yet verified.")
-            except Exception as exc:
-                results.put("Local ComfyUI unavailable: "+str(exc))
-        def poll():
-            try:
-                self.features.say(results.get_nowait())
-            except Empty:
-                self.window.after(200,poll)
-        threading.Thread(target=worker,daemon=True).start()
-        self.window.after(200,poll)
+                prompt = simpledialog.askstring("Local LTX-Video preview",
+                    "Describe a subject, its movement, and the camera shot.", parent=self.window)
+            finally:
+                self.review_active = False
+        if prompt is None:
+            return
+        if not 1 <= len(prompt.strip()) <= 1600:
+            self.features.say("Describe the clip in 1–1600 characters.")
+            return
+        self._video_work(prompt.strip())
+
+    def preview_clip(self):
+        root = self.root / "ltx-previews"
+        try:
+            videos = (p for p in root.glob("ai-video-*/draft.mp4")
+                      if (p.parent / "REVIEW_REQUIRED.txt").is_file()
+                      and p.is_file() and not p.is_symlink() and p.resolve().is_relative_to(root.resolve()))
+            latest = max(videos, key=lambda p: p.stat().st_mtime_ns, default=None)
+            if latest is None:
+                self.features.say("Generate an LTX preview clip first.")
+                return
+            os.startfile(str(latest))
+        except (OSError, AttributeError):
+            self.features.say("Could not open the preview in the default player.")
 
     def toggle(self):
         try:
@@ -117,6 +186,28 @@ class MoneyControls:
             os.startfile(str(path))
         except (OSError,AttributeError):
             self.features.say("Could not open the video with the Windows default player.")
+
+    def install_writer(self):
+        from tkinter import messagebox
+        import gaming_mode
+        if self.features.app.busy or self.features._running or gaming_mode.enabled():
+            self.features.say("Finish current work and turn off Gaming Mode before installing the writer.")
+            return
+        if not messagebox.askyesno("Install local Shorts writer",
+                "Download the official Qwen3 4B Instruct model through local Ollama (about 2.5 GB)? Your existing chat and coding models are unchanged.",
+                parent=self.window):
+            return
+        def work(cancel):
+            try:
+                import shorts_mode
+                return True, shorts_mode.install_story_model(cancel)
+            except Exception as exc:
+                return False, str(exc)[:240]
+        def complete(result):
+            ok, detail = result
+            self.features.app.set_status("Ready" if ok else "Writer installation failed")
+            self.features.say(detail)
+        self.features._launch("Installing local Shorts writer...", work, complete)
 
     def media_help(self):
         import webbrowser

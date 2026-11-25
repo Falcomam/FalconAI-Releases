@@ -1,56 +1,99 @@
-"""Local ComfyUI API adapter. Requires a separately installed, compatible API workflow."""
+"""Loopback ComfyUI transport. Cancellation always names the caller's prompt."""
 import json
+import re
 import time
-import urllib.request
+import urllib.error
 import urllib.parse
+import urllib.request
 import uuid
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ValueError("ComfyUI redirected a local request. Check its listening port.")
+
+
+def check_active(stop, gaming):
+    if stop() or gaming():
+        raise InterruptedError("Video generation paused by STOP or Gaming Mode.")
+
 
 class ComfyVideo:
     def __init__(self, port=8188):
-        self.base = "http://127.0.0.1:" + str(int(port))
+        port = int(port)
+        if not 1 <= port <= 65535:
+            raise ValueError("Invalid loopback port")
+        self.base = f"http://127.0.0.1:{port}"
         self.client_id = str(uuid.uuid4())
-        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
 
     def request(self, path, payload=None):
         data = None if payload is None else json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(self.base + path, data=data,
-            headers={"Content-Type": "application/json"})
-        with self.opener.open(req, timeout=10) as response:
-            return json.load(response)
+                                     headers={"Content-Type": "application/json"})
+        with self.opener.open(req, timeout=8) as response:
+            raw = response.read(8 * 1024 * 1024 + 1)
+        if len(raw) > 8 * 1024 * 1024:
+            raise ValueError("Local ComfyUI response exceeded the size limit.")
+        return json.loads(raw) if raw.strip() else {}
 
     def available(self):
         return self.request("/system_stats")
 
+    def require_supported(self):
+        version = self.available().get("system", {}).get("comfyui_version", "")
+        numbers = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:[+-].*)?", version)
+        if not numbers or tuple(map(int, numbers.groups())) < (0, 12, 3):
+            raise ValueError("Use ComfyUI 0.12.3 or newer for job-specific STOP support.")
+        return version
+
+    def _cancel(self, prompt_id):
+        # Dequeue first. If the job started meanwhile, the server compares its ID
+        # at interruption time. Neither call clears a queue or stops another job.
+        for path, body in (("/queue", {"delete": [prompt_id]}),
+                           ("/interrupt", {"prompt_id": prompt_id})):
+            try:
+                self.request(path, body)
+            except (OSError, ValueError):
+                pass
+
     def render(self, workflow, stop, gaming, timeout=1800, progress=lambda status: None):
-        """Return completed history entry; never upload or silently fall back."""
-        if stop() or gaming():
-            raise InterruptedError("Generation blocked by STOP or Gaming Mode")
+        check_active(stop, gaming)
         if not isinstance(workflow, dict) or not workflow or not all(
-            isinstance(node, dict) and "class_type" in node for node in workflow.values()
-        ):
-            raise ValueError("Expected ComfyUI API-format workflow")
-        result = self.request("/prompt", {"prompt": workflow, "client_id": self.client_id})
-        prompt_id = result["prompt_id"]
-        deadline = time.monotonic() + timeout
+                isinstance(n, dict) and isinstance(n.get("class_type"), str)
+                and isinstance(n.get("inputs"), dict) for n in workflow.values()):
+            raise ValueError("Expected a ComfyUI API workflow.")
+        self.require_supported()
+        prompt_id = str(uuid.uuid4())
+        check_active(stop, gaming)
         try:
+            try:
+                response = self.request("/prompt", {"prompt": workflow, "client_id": self.client_id,
+                                                    "prompt_id": prompt_id})
+            except urllib.error.HTTPError as exc:
+                if exc.code == 400:
+                    raise ValueError("ComfyUI rejected the video graph. Check models and core node versions.") from exc
+                raise
+            if response.get("prompt_id") != prompt_id or response.get("node_errors"):
+                raise RuntimeError("ComfyUI did not accept the complete video job.")
+            deadline = time.monotonic() + timeout
+            progress("Waiting for local video synthesis")
             while time.monotonic() < deadline:
-                if stop() or gaming():
-                    raise InterruptedError("Generation cancelled")
-                history = self.request("/history/" + urllib.parse.quote(prompt_id, safe=""))
-                entry = history.get(prompt_id)
+                check_active(stop, gaming)
+                entry = self.request("/history/" + prompt_id).get(prompt_id)
                 if entry:
                     status = entry.get("status", {})
                     if status.get("status_str") == "error":
-                        raise RuntimeError("ComfyUI workflow failed: " + str(status))
-                    if status.get("completed"):
+                        for event, details in reversed(status.get("messages", [])):
+                            if event == "execution_error":
+                                raise RuntimeError("ComfyUI failed at " + str(details.get("node_type", "a node"))[:80]
+                                                   + " (" + str(details.get("exception_type", "execution error"))[:100] + ").")
+                        raise RuntimeError("ComfyUI stopped before producing a video.")
+                    if status.get("completed") is True and status.get("status_str") == "success":
+                        check_active(stop, gaming)
                         return entry
-                progress("Waiting for ComfyUI " + prompt_id)
-                time.sleep(1)
-            raise TimeoutError("ComfyUI generation timed out")
+                time.sleep(.35)
+            raise TimeoutError("Local video generation timed out.")
         except BaseException:
-            # Delete only our queued job. Interrupt running work only if it is ours.
-            self.request("/queue", {"delete": [prompt_id]})
-            queue = self.request("/queue")
-            if any(len(job) > 1 and job[1] == prompt_id for job in queue.get("queue_running", [])):
-                self.request("/interrupt", {})
+            self._cancel(prompt_id)
             raise

@@ -3,6 +3,10 @@ on:
   push:
     paths:
       - 'packaging/shorts*.py'
+      - 'packaging/ltx_video.py'
+      - 'packaging/comfy_video.py'
+      - 'packaging/video_workflow.py'
+      - 'packaging/stage_shorts.py'
       - 'packaging/developer_chat.py'
       - 'packaging/tests/test_shorts*.py'
       - '.github/workflows/validate-shorts.yml'

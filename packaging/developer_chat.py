@@ -82,10 +82,6 @@ def route(text):
     if not isinstance(text, str):
         return None
     raw = text.strip()
-    if raw.casefold() in ("/shorts", "/shorts status"):
-        return "shorts_status", ""
-    if raw.casefold() == "/shorts draft":
-        return "shorts_draft", ""
     if raw.casefold() in ("/foundation", "/foundation status", "/capabilities"):
         return "foundation", ""
     match = _ENGINE.fullmatch(raw)
@@ -137,11 +133,6 @@ class ChatFeatures:
         self._serial = 0
         self._event = None
         self._running = False
-        # Display once when the existing main chat is ready, without starting AI.
-        try:
-            self.app.root.after_idle(self._setup_money_mode)
-        except (AttributeError, RuntimeError):
-            pass
 
     def say(self, message):
         self.app.append("Falcon", str(message))
@@ -169,11 +160,7 @@ class ChatFeatures:
         if gaming_mode.enabled() and action in ("project_new", "project_edit", "project_edit_small"):
             self.say("Gaming Mode is ON. New AI project generation is paused to protect game performance. Type /engine gaming off to resume.")
             return True
-        if action == "shorts_status":
-            self._shorts_status()
-        elif action == "shorts_draft":
-            self._shorts_draft()
-        elif action == "foundation":
+        if action == "foundation":
             self.say(falcon_foundation.render_status(
                 gaming=gaming_mode.enabled(),
                 coding_model=engine_manager.saved_coding_model()))
@@ -391,48 +378,6 @@ class ChatFeatures:
             self._launch("Checking installed models…", work, complete)
             return
         self.say(ENGINE_HELP)
-
-    def _setup_money_mode(self):
-        if getattr(self, "_money_controls", None) is not None:
-            return
-        self._shorts_status()
-        try:
-            import shorts_controls
-            self._money_controls = shorts_controls.MoneyControls(self)
-        except (ImportError, AttributeError, RuntimeError, OSError) as exc:
-            self.say("Money Mode controls unavailable: " + str(exc)[:160])
-
-    def _shorts_status(self):
-        try:
-            import shorts_report
-            self.say(shorts_report.report(gaming=gaming_mode.enabled()))
-        except (ImportError, OSError, ValueError):
-            self.say("Shorts report unavailable in this build. No video was generated or uploaded.")
-
-    def _shorts_draft(self):
-        if gaming_mode.enabled():
-            self.say("Gaming Mode is ON. Shorts generation is paused.")
-            return
-
-        def work(cancel):
-            try:
-                import shorts_mode
-                status = engine_manager.probe(timeout=3)
-                model = engine_manager.saved_chat_model()
-                if not status["online"] or model not in status["models"]:
-                    raise RuntimeError("Selected Ollama chat model is unavailable.")
-                folder = shorts_mode.create(model, cancel=cancel)
-                return True, str(folder)
-            except Exception as exc:
-                return False, str(exc)[:300]
-
-        def complete(result):
-            ok, detail = result
-            self.app.set_status("Ready • Shorts" if ok else "Error • Shorts")
-            self.say(("Local draft ready for review. No upload performed.\n" if ok else
-                      "Shorts draft not completed; partial files may exist.\n") + detail)
-
-        self._launch("Rendering local Short…", work, complete)
 
     def _generate(self, kind, goal):
         if self.app.busy or self._running:
