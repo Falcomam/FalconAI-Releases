@@ -28,6 +28,7 @@ PROVIDERS = {
     "activepieces": ("automation blueprint", "Local JSON blueprint; NOT a native import or live connection"),
 }
 NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,35}$")
+SELLER_HANDLE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{2,29}$")
 SECRET = re.compile(
     r"(?i)(?:\b(?:password|api[_ -]?key|private[_ -]?key|secret|access[_ -]?token)"
     r"\s*[:=]\s*\S+|\bsk-[a-z0-9_-]{15,})")
@@ -160,8 +161,9 @@ def create_order(service, alias, brief, *, root=ORDERS):
         "checklist": list(CHECKLIST[service]), "created_at": _now(),
         "updated_at": _now(), "revisions": 0,
     }
+    raw = _encode(order)
     with (root / (order_id + ".json")).open("xb") as handle:
-        handle.write(_encode(order))
+        handle.write(raw)
     return order
 
 
@@ -267,6 +269,43 @@ def handoff(order_id, provider, *, root=ORDERS):
     return base
 
 
+def save_seller_handle(handle, *, root=ORDERS):
+    """Store the owner's public Fiverr handle locally, NEVER login credentials."""
+    if not isinstance(handle, str) or not SELLER_HANDLE.fullmatch(handle):
+        raise MoneyError("Provide a public seller handle (3-30 letters, digits, . _ or -)")
+    folder = _folder(Path(root).parent, create=True)
+    file = folder / "seller_profile.json"
+    if _redirected(file):
+        raise MoneyError("Redirected seller profile not permitted")
+    data = json.dumps({"fiverr_handle": handle}, ensure_ascii=True).encode("utf-8")
+    temp = file.with_name(file.name + "." + uuid.uuid4().hex + ".tmp")
+    try:
+        with temp.open("xb") as stream:
+            stream.write(data)
+        if _redirected(file):
+            raise MoneyError("Seller profile changed during save")
+        os.replace(temp, file)
+    finally:
+        temp.unlink(missing_ok=True)
+    return handle
+
+
+def saved_seller_handle(*, root=ORDERS):
+    file = _folder(Path(root).parent) / "seller_profile.json"
+    if not file.exists():
+        return None
+    if _redirected(file) or not file.is_file() or file.stat().st_size > 1000:
+        raise MoneyError("Seller profile file is unsafe")
+    try:
+        data = json.loads(file.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise MoneyError("Seller profile cannot be read") from exc
+    handle = data.get("fiverr_handle") if isinstance(data, dict) else None
+    if not isinstance(handle, str) or not SELLER_HANDLE.fullmatch(handle):
+        raise MoneyError("Invalid saved seller handle")
+    return handle
+
+
 def tool_catalog():
     return tuple({"name": name, "purpose": purpose, "integration": note}
                  for name, (purpose, note) in PROVIDERS.items())
@@ -282,8 +321,19 @@ def handle_command(text, *, root=ORDERS):
                 "/money list • /money show <id> • /money quote <id> <USD>\n"
                 "/money status <id> new|working|review|delivered\n"
                 "/money handoff <id> agent-fiverr|hustlebot|openhands|n8n|activepieces\n"
-                "/money tools • /money forget <id> CONFIRM\n"
+                "/money tools • /money seller <public_handle>\n"
+                "/money forget <id> CONFIRM\n"
                 "No Fiverr messages sent, external tools installed or paid API used.")
+    if low == "seller":
+        name = saved_seller_handle(root=root)
+        return "Public Fiverr seller: " + (name if name else "not configured")
+    if low.startswith("seller "):
+        parts = text.split()
+        if len(parts) != 2:
+            raise MoneyError("Use /money seller <public_handle>")
+        handle = save_seller_handle(parts[1], root=root)
+        return ("Saved public seller handle locally: @" + handle +
+                ". No Fiverr login or account access has been granted.")
     if low == "tools":
         return "EXTERNAL TOOL BLUEPRINTS (not installed or connected):\n" + "\n".join(
             "- " + item["name"] + ": " + item["integration"] for item in tool_catalog())
