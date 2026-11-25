@@ -28,9 +28,9 @@ def check_pause():
 
 def script(model):
     check_pause()
-    prompt = ("Write a completely original fictional non-graphic horror microstory. "
+    prompt = ("Write a completely original absurdist comedy microstory for a brainrot-style Short. Invent a surreal fictional object-animal character, give it a ridiculous goal, escalate with unexpected visual gags, and end with a surprising punchline. "
               "Return JSON with title and lines (exactly 6 short sentences, "
-              "each 8-16 words). Strong hook, escalating suspense, twist. "
+              "each 8-16 words). Strong hook, rapid escalation, funny payoff. Vary the premise and setting. Do not imitate existing meme characters or voices. "
               "No real people, copyrighted characters, or factual claims.")
     req = urllib.request.Request("http://127.0.0.1:11434/api/generate",
         data=json.dumps(dict(model=model, prompt=prompt, stream=False, format="json")).encode(),
