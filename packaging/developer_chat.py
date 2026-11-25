@@ -137,6 +137,11 @@ class ChatFeatures:
         self._serial = 0
         self._event = None
         self._running = False
+        # Display once when the existing main chat is ready, without starting AI.
+        try:
+            self.app.root.after_idle(self._shorts_status)
+        except (AttributeError, RuntimeError):
+            pass
 
     def say(self, message):
         self.app.append("Falcon", str(message))
@@ -389,23 +394,10 @@ class ChatFeatures:
 
     def _shorts_status(self):
         try:
-            import datetime
-            import shorts_mode
-            folder = shorts_mode.OUT / datetime.date.today().isoformat()
-            if (folder / "FAILED.txt").exists():
-                state = "Failed or interrupted draft; inspect its folder."
-            elif (folder / "REVIEW_REQUIRED.txt").exists():
-                state = "Local draft ready for review."
-            elif folder.exists():
-                state = "Draft reserved or in progress; inspect its folder."
-            else:
-                state = "No draft reserved today."
-            self.say("Shorts Mode (local draft only). " + state +
-                     "\nGaming Mode: " + ("ON" if gaming_mode.enabled() else "OFF") +
-                     "\nFolder: " + str(folder) +
-                     "\nType /shorts draft to create today's video. No automatic publishing.")
-        except ImportError:
-            self.say("Shorts dependencies are not available in this build.")
+            import shorts_report
+            self.say(shorts_report.report(gaming=gaming_mode.enabled()))
+        except (ImportError, OSError, ValueError):
+            self.say("Shorts report unavailable in this build. No video was generated or uploaded.")
 
     def _shorts_draft(self):
         if gaming_mode.enabled():
