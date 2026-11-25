@@ -11,6 +11,8 @@ from pathlib import Path
 import re
 import subprocess
 import urllib.request
+import urllib.error
+import socket
 import time
 import shutil
 from shorts_upload import probe
@@ -35,6 +37,32 @@ def check_pause():
     if (cancel is not None and cancel.is_set()) or paused() or (OUT / "STOP").exists():
         raise RuntimeError("Shorts paused by Gaming Mode or STOP")
 
+SHORTS_MODEL = "qwen3:4b-instruct-2507-q4_K_M"
+
+def preferred_story_model(selected, installed):
+    # A separate non-thinking writer, without changing the user's main chat model.
+    if SHORTS_MODEL in installed:
+        return SHORTS_MODEL
+    if "qwen3:4b-instruct" in installed:
+        return "qwen3:4b-instruct"
+    return selected
+
+def story_schema():
+    return {
+        "type": "object", "required": ["title", "lines", "scenes"],
+        "additionalProperties": False,
+        "properties": {
+            "title": {"type": "string", "minLength": 1, "maxLength": 90},
+            "lines": {"type": "array", "minItems": 6, "maxItems": 6,
+                      "items": {"type": "string", "minLength": 1, "maxLength": 120}},
+            "scenes": {"type": "array", "minItems": 6, "maxItems": 6,
+                       "items": {"type": "object", "required": ["setting", "action"],
+                                 "additionalProperties": False, "properties": {
+                                     "setting": {"enum": sorted(SETTINGS)},
+                                     "action": {"enum": sorted(ACTIONS)}}}}
+        }
+    }
+
 def script(model):
     check_pause()
     prompt = ("Write a completely original absurdist comedy microstory for a brainrot-style Short. Invent a surreal fictional object-animal character, give it a ridiculous goal, escalate with unexpected visual gags, and end with a surprising punchline. "
@@ -45,14 +73,25 @@ def script(model):
         check_pause()
         try:
             req = urllib.request.Request("http://127.0.0.1:11434/api/generate",
-                data=json.dumps(dict(model=model, prompt=prompt, stream=False, format="json")).encode(),
+                data=json.dumps(dict(model=model, prompt=prompt, stream=False, think=False, format=story_schema(), options={"num_ctx":4096,"num_predict":1024,"temperature":0.55})).encode(),
                 headers={"Content-Type":"application/json"})
             with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=120) as r:
                 raw = r.read(128001)
             if len(raw)>128000:
                 raise ValueError("Model response too large")
-            return validate_story(json.loads(json.loads(raw)["response"]))
-        except (ValueError, KeyError, TypeError):
+            result = json.loads(raw)
+            if result.get("done_reason") == "length":
+                raise ValueError("Narration hit the generation budget")
+            return validate_story(json.loads(result["response"]))
+        except urllib.error.HTTPError as exc:
+            if exc.code not in (429, 500, 502, 503, 504):
+                raise RuntimeError(f"Ollama HTTP {exc.code}; check selected model in AI Engine.") from None
+            if attempt == 2:
+                raise RuntimeError(f"Ollama HTTP {exc.code} after three bounded attempts. Install {SHORTS_MODEL} for Shorts; no upload occurred.") from None
+        except (urllib.error.URLError, TimeoutError, socket.timeout):
+            if attempt == 2:
+                raise RuntimeError("Local Ollama unavailable or timed out after three attempts. No upload occurred.") from None
+        except (ValueError, KeyError, TypeError, AttributeError):
             if attempt == 2:
                 raise ValueError("Qwen returned invalid narration or scenes three times. No video was uploaded.") from None
             prompt += " Repair the output: six plain English narration sentences, 6-18 words each, no emoji or markup, six valid scene objects."
