@@ -10,6 +10,10 @@ on:
       - "packaging/project_targeted_edits.py"
       - "packaging/engine_manager.py"
       - "packaging/gaming_mode.py"
+      - "packaging/falcon_foundation.py"
+      - "packaging/v14_release_checks.py"
+      - "packaging/tests/test_falcon_foundation.py"
+      - "packaging/tests/test_v14_release_checks.py"
       - "packaging/site_design_check.py"
       - "packaging/tests/test_site_design_check.py"
       - "packaging/tests/test_gaming_mode.py"
@@ -64,7 +68,9 @@ jobs:
                         Path("packaging/tests/test_project_targeted_edits.py"),
                         Path("packaging/tests/test_engine_manager.py"),
                         Path("packaging/tests/test_gaming_mode.py"),
-                        Path("packaging/tests/test_site_design_check.py")])
+                        Path("packaging/tests/test_site_design_check.py"),
+                        Path("packaging/tests/test_falcon_foundation.py"),
+                        Path("packaging/tests/test_v14_release_checks.py")])
           if len(tests) < 13:
               raise SystemExit("Missing required self-improvement test files")
           for path in tests:
