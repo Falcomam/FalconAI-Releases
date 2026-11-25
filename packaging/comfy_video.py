@@ -8,6 +8,10 @@ import urllib.request
 import uuid
 
 
+class VideoJobFailed(RuntimeError):
+    """ComfyUI reported that this prompt finished with an execution error."""
+
+
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         raise ValueError("ComfyUI redirected a local request. Check its listening port.")
@@ -90,8 +94,14 @@ class ComfyVideo:
                     if status.get("status_str") == "error":
                         for event, details in reversed(status.get("messages", [])):
                             if event == "execution_error":
-                                raise RuntimeError("ComfyUI failed at " + str(details.get("node_type", "a node"))[:80]
-                                                   + " (" + str(details.get("exception_type", "execution error"))[:100] + ").")
+                                kind = str(details.get("exception_type", "execution error"))[:100]
+                                node = str(details.get("node_type", "a node"))[:80]
+                                message = f"ComfyUI failed at {node} ({kind})."
+                                # Repeating the same model at the same size cannot fix exhausted memory.
+                                memory_detail = (kind + " " + str(details.get("exception_message", ""))[:512]).lower()
+                                if "out of memory" in memory_detail or "outofmemory" in memory_detail or "memoryerror" in memory_detail:
+                                    raise RuntimeError(message)
+                                raise VideoJobFailed(message)
                         raise RuntimeError("ComfyUI stopped before producing a video.")
                     if status.get("completed") is True and status.get("status_str") == "success":
                         check_active(stop, gaming)

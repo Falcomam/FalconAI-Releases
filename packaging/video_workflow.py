@@ -13,6 +13,10 @@ from comfy_video import check_active
 MAX_VIDEO = 512 * 1024 * 1024
 
 
+class InvalidClip(ValueError):
+    """The completed job returned unusable media."""
+
+
 def load_workflow(path, prompt_node, prompt):
     graph = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(graph, dict) or not graph:
@@ -46,7 +50,7 @@ def _output_file(entry, output_node):
                         or ":" in name + sub or "\x00" in name + sub):
                     raise ValueError("Invalid video output location from ComfyUI.")
                 return {"filename": name, "subfolder": sub, "type": "output"}
-    raise RuntimeError("The completed workflow returned no MP4 from its video output.")
+    raise InvalidClip("The completed workflow returned no MP4 from its video output.")
 
 
 def _media_command(args, stop, gaming, timeout):
@@ -63,7 +67,7 @@ def _media_command(args, stop, gaming, timeout):
                 except subprocess.TimeoutExpired:
                     continue
                 if proc.returncode:
-                    raise ValueError("ComfyUI returned an undecodable video.")
+                    raise InvalidClip("ComfyUI returned an undecodable video.")
                 return data
             raise TimeoutError("Local video verification timed out.")
         finally:
@@ -106,13 +110,24 @@ def render_to(client, graph, target, stop, gaming, progress, *, output_node=None
                                 "-of", "json"], stop, gaming, 30)
         streams = json.loads(probe).get("streams", [])
         if len(streams) != 1:
-            raise ValueError("No video stream in local output.")
+            raise InvalidClip("No video stream in local output.")
         video = streams[0]
         if expected and (video.get("width"), video.get("height"), video.get("nb_frames")) != (
                 expected[0], expected[1], str(expected[2])):
-            raise ValueError("Generated clip dimensions or frame count did not match the LTX request.")
-        _media_command(["ffmpeg", "-nostdin", "-v", "error", "-xerror", *source,
-                        "-map", "0:v:0", "-f", "null", "-"], stop, gaming, 180)
+            raise InvalidClip("Generated clip dimensions or frame count did not match the LTX request.")
+        decode = ["ffmpeg", "-nostdin", "-v", "error", "-xerror", *source, "-map", "0:v:0"]
+        if expected:
+            # Cap the hash output even if the container understates its frame count.
+            hashes = _media_command([*decode, "-fps_mode", "passthrough", "-frames:v", str(expected[2] + 1),
+                                     "-f", "framemd5", "-"], stop, gaming, 180)
+            frames = [line.rsplit(b",", 1)[-1].strip() for line in hashes.splitlines()
+                      if line and not line.startswith(b"#")]
+            if len(frames) != expected[2]:
+                raise InvalidClip("Decoded frame count differs from the LTX request.")
+            if len(frames) > 1 and len(set(frames)) == 1:
+                raise InvalidClip("All decoded LTX frames were identical.")
+        else:
+            _media_command([*decode, "-f", "null", "-"], stop, gaming, 180)
         check_active(stop, gaming)
         temp.replace(target)
         return target

@@ -195,9 +195,7 @@ def render_video(folder, story, key, frames, *, ltx=None, progress=lambda messag
             cancel = _CANCEL.get()
             stop = lambda: (cancel is not None and cancel.is_set()) or (OUT/"STOP").exists()
             clip = folder / f"ltx{i}.mp4"
-            progress(f"Generating LTX scene {i+1} of 6")
-            ltx.render(ltx_video.scene_prompt(story, i), clip, stop, paused,
-                       seed=(int(key[:15], 16) + i))
+            ltx_video.render_scene(ltx, story, i, key, clip, stop, paused, progress)
             visual = ["-i", clip.name]
             speed = (count - 1) * ltx_video.FPS / ((ltx_video.FRAMES - 1) * FPS)
             video_filter = (f"setpts={speed:.9f}*PTS,fps={FPS},scale=720:1280:"

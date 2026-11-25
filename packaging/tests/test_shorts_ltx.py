@@ -189,12 +189,58 @@ class LTXContractTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 ltx.build_workflow("hi", 0, **opts)
 
+    def test_frozen_frames_never_become_a_reviewable_preview(self):
+        still = self.root / "still.mp4"
+        subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=purple:s=96x160:r=24",
+                        "-frames:v", "49", "-c:v", "libx264", str(still)], check=True)
+        self.served = still.read_bytes()
+        with self.assertRaisesRegex(ValueError, "identical"):
+            self.generate()
+        self.assertEqual(list(self.root.iterdir()), [still])
+
+    def test_scene_retries_only_after_a_confirmed_failure(self):
+        story = {"title": "Moon Mail", "lines": ["A bird flies."] * 6,
+                 "scenes": [{"setting": "moon", "action": "jump"}] * 6}
+        def render(engine):
+            return ltx.render_scene(engine, story, 2, "abcdef1234567890", self.root / "clip.mp4",
+                                    self.stop.is_set, lambda: False, lambda message: None)
+        for failure in (comfy_video.VideoJobFailed("sampler failed"), video_workflow.InvalidClip("bad MP4")):
+            with self.subTest(failure=failure):
+                engine = Mock()
+                engine.render.side_effect = [failure, failure]
+                with self.assertRaises(type(failure)):
+                    render(engine)
+                self.assertEqual(engine.render.call_count, 2)
+                first, retry = engine.render.call_args_list
+                self.assertEqual(first.args, retry.args)
+                self.assertEqual(retry.kwargs["seed"], first.kwargs["seed"] + 6)
+        for failure in (ConnectionError("lost submission"), TimeoutError(), InterruptedError(),
+                        RuntimeError("out of memory"), ValueError("invalid output path"), FileExistsError()):
+            with self.subTest(failure=failure):
+                engine = Mock()
+                engine.render.side_effect = failure
+                with self.assertRaises(type(failure)):
+                    render(engine)
+                engine.render.assert_called_once()
+        def stop_before_retry(*args, **kwargs):
+            self.stop.set()
+            raise video_workflow.InvalidClip("bad MP4")
+        engine = Mock()
+        engine.render.side_effect = stop_before_retry
+        with self.assertRaises(InterruptedError):
+            render(engine)
+        engine.render.assert_called_once()
+
     def test_six_ai_scenes_preserve_narration_captions_and_daily_review(self):
         out = self.root / "shorts"
         day = datetime.date(2026, 1, 1)
         story = {"title": "Moon Mail", "lines": ["A tiny bird delivers mail across the quiet moon."] * 6,
                  "scenes": [{"setting": "moon", "action": "jump"}] * 6}
+        attempted = []
         def render(prompt, target, *args, **kwargs):
+            attempted.append(target.name)
+            if target.name == "ltx2.mp4" and attempted.count(target.name) == 1:
+                raise video_workflow.InvalidClip("frames were identical")
             shutil.copy2(self.clip, target)
         engine = Mock()
         engine.render.side_effect = render
@@ -216,8 +262,8 @@ class LTXContractTests(unittest.TestCase):
             stack.enter_context(patch.object(shorts_mode, "script", return_value=story))
             stack.enter_context(patch.object(shorts_mode, "render_scene", side_effect=AssertionError("visual fallback")))
             folder = shorts_mode.create("fixture", day)
-            self.assertEqual(engine.render.call_count, 6)
-            self.assertEqual(len({c.kwargs["seed"] for c in engine.render.call_args_list}), 6)
+            self.assertEqual(attempted, [f"ltx{i}.mp4" for i in (0, 1, 2, 2, 3, 4, 5)])
+            self.assertEqual(len({c.kwargs["seed"] for c in engine.render.call_args_list}), 7)
             self.assertIn("LTX-Video", (folder / "REVIEW_REQUIRED.txt").read_text())
             self.assertEqual(shorts_controls.ready_video(self.root, day), folder / "draft.mp4")
             self.assertEqual((folder / "captions.srt").read_text().count("-->"), 6)

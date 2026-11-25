@@ -3,8 +3,8 @@ from pathlib import Path, PureWindowsPath
 import secrets
 import urllib.error
 
-from comfy_video import ComfyVideo, check_active
-from video_workflow import generate, media_tools, render_to
+from comfy_video import ComfyVideo, VideoJobFailed, check_active
+from video_workflow import InvalidClip, generate, media_tools, render_to
 
 CHECKPOINT = "ltx-video-2b-v0.9.5.safetensors"
 ENCODERS = ("t5xxl_fp8_e4m3fn.safetensors", "t5xxl_fp16.safetensors")
@@ -129,3 +129,18 @@ def scene_prompt(story, index):
             f"the {scene['setting']}. The action is {scene['action']}: {story['lines'][index]} "
             "Show the action unfolding from start to finish, with expressive movement, "
             "a clear subject, cinematic lighting, and a vertical composition. No lettering.")
+
+
+def render_scene(engine, story, index, key, destination, stop, gaming, progress):
+    prompt = scene_prompt(story, index)
+    count = len(story["scenes"])
+    seed = int(key[:15], 16) + index
+    label = f"LTX scene {index + 1} of {count}"
+    check_active(stop, gaming)
+    progress(f"Generating {label}")
+    try:
+        return engine.render(prompt, destination, stop, gaming, seed=seed)
+    except (InvalidClip, VideoJobFailed) as exc:
+        check_active(stop, gaming)
+        progress(f"Retrying {label} once. {exc}")
+        return engine.render(prompt, destination, stop, gaming, seed=seed + count)
