@@ -10,6 +10,7 @@ on:
       - "packaging/tests/test_shorts*.py"
 permissions:
   contents: write
+  statuses: write
 concurrency:
   group: falcon-v143-shorts-release
   cancel-in-progress: false
@@ -21,6 +22,12 @@ jobs:
       PYTHONUTF8: "1"
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      - name: Report Windows release run link
+        shell: pwsh
+        run: |
+          $url="$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+          gh api --method POST "repos/$env:GITHUB_REPOSITORY/statuses/$env:GITHUB_SHA" -f state=pending -f context=falcon-v143-release -f "target_url=$url" -f "description=Windows verification started" --silent
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot record release run status' }
       - name: Checkout Falcon Ai source
         uses: actions/checkout@v4
         with:
@@ -353,3 +360,17 @@ jobs:
           $remote=gh api repos/Falcomam/FalconAI-Releases/releases/tags/v14.3.0 --jq '.assets[] | select(.name == "Falcon_Ai_Setup.exe") | .digest'
           if ($LASTEXITCODE -ne 0 -or -not $remote -or $remote.Trim().ToLowerInvariant() -ne ('sha256:'+$hash)) { throw 'Public release digest verification failed' }
           Write-Host ('PASS: Falcon V14.3.0 published with verified SHA256 '+$hash)
+      - name: Report final Windows release result
+        if: always()
+        shell: pwsh
+        env:
+          BUILD_RESULT: ${{ job.status }}
+        run: |
+          $url="$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+          $state = switch ($env:BUILD_RESULT) {
+            'success' { 'success' }
+            'failure' { 'failure' }
+            default { 'error' }
+          }
+          gh api --method POST "repos/$env:GITHUB_REPOSITORY/statuses/$env:GITHUB_SHA" -f "state=$state" -f context=falcon-v143-release -f "target_url=$url" -f "description=Windows release job: $env:BUILD_RESULT" --silent
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot record final release status' }
