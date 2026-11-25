@@ -118,9 +118,18 @@ class PublishUI:
         self.controls=controls; self.features=controls.features; self.window=controls.window
 
     def start(self):
+        if self.controls.review_active:
+            return
+        self.controls.review_active=True
+        try:
+            self._start()
+        finally:
+            self.controls.review_active=False
+
+    def _start(self):
         import gaming_mode
         from shorts_controls import ready_video
-        if self.features.app.busy or self.features._running or gaming_mode.enabled():
+        if self.features.app.busy or self.features._running or gaming_mode.enabled() or (self.controls.root/'shorts'/'STOP').exists():
             self.features.say('Finish current work or disable Gaming Mode before upload.'); return
         video=ready_video(self.controls.root)
         if video is None:
@@ -147,11 +156,15 @@ class PublishUI:
             if value[0]=='error':
                 self.features.say('YouTube authorization or media check failed ('+value[1]+'). No upload performed.');return
             service,cid,name,title,reviewed_hash=value
-            dialog=ReviewDialog(self.window,video,title,cid,name)
-            body=dialog.result
-            if not body:return
-            if not messagebox.askyesno('Confirm channel','Send this reviewed video to '+name+' ('+cid+') with the selected publication settings?',parent=self.window):return
-            self.send(service,cid,video,body,reviewed_hash)
+            self.controls.review_active=True
+            try:
+                dialog=ReviewDialog(self.window,video,title,cid,name)
+                body=dialog.result
+                if not body:return
+                if not messagebox.askyesno('Confirm channel','Send this reviewed video to '+name+' ('+cid+') with the selected publication settings?',parent=self.window):return
+                self.send(service,cid,video,body,reviewed_hash)
+            finally:
+                self.controls.review_active=False
         self.features._launch('Checking video and connecting YouTube…',work,complete)
 
     def send(self,service,cid,video,body,reviewed_hash):
