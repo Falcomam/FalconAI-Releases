@@ -39,25 +39,45 @@ def script(model):
     check_pause()
     prompt = ("Write a completely original absurdist comedy microstory for a brainrot-style Short. Invent a surreal fictional object-animal character, give it a ridiculous goal, escalate with unexpected visual gags, and end with a surprising punchline. "
               "Return JSON with title and lines (exactly 6 short sentences, "
-              "each 8-16 words), and scenes (exactly 6 objects each with setting and action). Settings: kitchen, city, moon, gym, ocean, desert, office. Actions: stand, jump, run, panic, celebrate, fall. Match each visual to its narration. Strong hook, rapid escalation, funny payoff. Vary the premise and setting. Do not imitate existing meme characters or voices. "
+              "each 8-14 words), and scenes (exactly 6 objects each with setting and action). Settings: kitchen, city, moon, gym, ocean, desert, office. Actions: stand, jump, run, panic, celebrate, fall. Match each visual to its narration. Strong hook, rapid escalation, funny payoff. Vary the premise and setting. Do not imitate existing meme characters or voices. "
               "No real people, copyrighted characters, or factual claims.")
-    req = urllib.request.Request("http://127.0.0.1:11434/api/generate",
-        data=json.dumps(dict(model=model, prompt=prompt, stream=False, format="json")).encode(),
-        headers={"Content-Type":"application/json"})
-    with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=120) as r:
-        raw = r.read(128001)
-    if len(raw)>128000:
-        raise ValueError("Model response too large")
-    obj = json.loads(json.loads(raw)["response"])
-    title, lines = obj["title"], obj["lines"]
-    if not isinstance(title,str) or not 1<=len(title)<=90 or not isinstance(lines,list) or len(lines)!=6:
+    for attempt in range(3):
+        check_pause()
+        try:
+            req = urllib.request.Request("http://127.0.0.1:11434/api/generate",
+                data=json.dumps(dict(model=model, prompt=prompt, stream=False, format="json")).encode(),
+                headers={"Content-Type":"application/json"})
+            with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=120) as r:
+                raw = r.read(128001)
+            if len(raw)>128000:
+                raise ValueError("Model response too large")
+            return validate_story(json.loads(json.loads(raw)["response"]))
+        except (ValueError, KeyError, TypeError):
+            if attempt == 2:
+                raise ValueError("Qwen returned invalid narration or scenes three times. No video was uploaded.") from None
+            prompt += " Repair the output: six plain English narration sentences, 6-18 words each, no emoji or markup, six valid scene objects."
+    raise AssertionError("Unreachable")
+
+def validate_story(obj):
+    if not isinstance(obj, dict):
         raise ValueError("Invalid story structure")
-    if any(not isinstance(x,str) or not 8<=len(x.split())<=16 or len(x)>120 or not re.fullmatch(r"[A-Za-z0-9 ,.!?'\-]+",x) for x in lines):
-        raise ValueError("Invalid story lines; retry")
+    title, lines = obj.get("title"), obj.get("lines")
+    if not isinstance(title,str) or not 1<=len(title.strip())<=90 or not isinstance(lines,list) or len(lines)!=6:
+        raise ValueError("Invalid story structure")
+    clean = []
+    punctuation = str.maketrans({"’":"'","‘":"'","“":"","”":"","—":"-","–":"-","…":"...","\"":"",";":",",":":","})
+    for line in lines:
+        if not isinstance(line,str):
+            raise ValueError("Invalid story line type")
+        line = " ".join(line.translate(punctuation).split())
+        if not 6<=len(line.split())<=18 or not re.fullmatch(r"[A-Za-z0-9 ,.!?'\-]{1,120}",line):
+            raise ValueError("Invalid story lines")
+        clean.append(line)
     scenes = obj.get("scenes")
     if not isinstance(scenes,list) or len(scenes)!=6 or any(not isinstance(s,dict) or s.get("setting") not in SETTINGS or s.get("action") not in ACTIONS for s in scenes):
-        raise ValueError("Invalid scene choices; retry")
-    return {"title":title, "lines":lines, "scenes":scenes}
+        raise ValueError("Invalid scene choices")
+    return {"title":title.strip(), "lines":clean, "scenes":scenes}
+
 
 def run(cmd, cwd):
     check_pause()
@@ -122,6 +142,15 @@ def _create(model, day=None):
     OUT.mkdir(parents=True,exist_ok=True)
     folder=OUT/(day or dt.date.today()).isoformat()
     # Atomic directory reservation prevents concurrent duplicate drafts.
+    if (folder.is_dir() and not folder.is_symlink() and
+            folder.resolve().parent == OUT.resolve() and
+            (folder/"FAILED.txt").is_file() and
+            not (folder/"REVIEW_REQUIRED.txt").exists() and
+            not (folder/"upload_attempt.json").exists()):
+        # Preserve failed work; only incomplete, never-reviewed attempts qualify.
+        import uuid
+        archive = OUT / (".failed-" + folder.name + "-" + uuid.uuid4().hex)
+        folder.rename(archive)
     folder.mkdir(exist_ok=False)
     try:
         story=script(model)
@@ -129,18 +158,19 @@ def _create(model, day=None):
         key = distinct_story(story, OUT, folder)
         (folder/"story.json").write_text(json.dumps(story,indent=2),encoding="utf-8")
         # One actual speech recording per scene, not guessed timing.
-        (folder/"speak.ps1").write_text("""Add-Type -AssemblyName System.Speech
+        speech_command = """$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Speech
 $s=New-Object System.Speech.Synthesis.SpeechSynthesizer
 $s.Rate=-1
 $s.SetOutputToWaveFile((Join-Path (Get-Location) 'voice.wav'))
 $s.Speak([IO.File]::ReadAllText((Join-Path (Get-Location) 'narration.txt')))
 $s.Dispose()
-""",encoding="utf-8")
+"""
         frames = []
         for i, line in enumerate(story["lines"]):
             check_pause()
             (folder/"narration.txt").write_text(line,encoding="utf-8")
-            run(["powershell.exe","-NoProfile","-NonInteractive","-File","speak.ps1"],folder)
+            run(["powershell.exe","-NoProfile","-NonInteractive","-Command",speech_command],folder)
             voice = folder / f"voice{i}.wav"
             (folder/"voice.wav").replace(voice)
             frames.append(scene_frames(voice))
