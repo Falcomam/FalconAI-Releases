@@ -7,6 +7,7 @@ on:
       - "packaging/customer_faq.py"
       - "packaging/tests/test_money_mode.py"
       - "packaging/tests/test_customer_faq.py"
+      - "packaging/tests/test_money_mode_chat.py"
       - "packaging/prepare_money_mode_candidate.py"
       - ".github/workflows/validate-money-mode.yml"
   pull_request:
@@ -14,6 +15,7 @@ on:
       - "packaging/money_mode.py"
       - "packaging/tests/test_money_mode.py"
       - "packaging/tests/test_customer_faq.py"
+      - "packaging/tests/test_money_mode_chat.py"
       - "packaging/prepare_money_mode_candidate.py"
       - ".github/workflows/validate-money-mode.yml"
   workflow_dispatch:
@@ -38,3 +40,36 @@ jobs:
           python -m unittest discover -s packaging/tests -p test_money_mode.py -v
           python -m unittest discover -s packaging/tests -p test_customer_faq.py -v
           python -m compileall -q packaging/money_mode.py packaging/customer_faq.py packaging/prepare_money_mode_candidate.py
+  staged-chat:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Reconstruct the existing Falcon V14 development candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install 'Pillow>=11.0'
+          for patch in v13.6 v13.6.1 v13.6.2 v13.6.3 v13.6.4 v13.6.5; do
+            python "patches/$patch/apply.py"
+          done
+          for script in \
+            prepare.py prepare_icon_release.py prepare_engine_candidate.py \
+            prepare_single_chat_candidate.py prepare_v138_release.py \
+            prepare_copy_reply_candidate.py prepare_command_palette_candidate.py \
+            prepare_web_quality_candidate.py prepare_project_revision_candidate.py \
+            prepare_project_browser_candidate.py prepare_next_bundle_windows.py \
+            prepare_project_search_candidate.py prepare_quiet_powershell_candidate.py \
+            prepare_packaged_health_candidate.py finalize_packaged_health_release.py \
+            prepare_v14_release_candidate.py prepare_agent_coding_candidate.py \
+            prepare_money_mode_candidate.py; do
+            python "packaging/$script"
+          done
+      - name: Verify Money Mode live chat routing and review gate
+        shell: bash
+        run: |
+          python -m unittest discover -s packaging/tests -p test_money_mode_chat.py -v
+          python -m compileall -q build/Falcon_Ai_MoneyMode_Candidate
