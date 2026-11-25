@@ -73,9 +73,9 @@ replace(chat, '''        arguments = payload.split()
             def complete(result):
                 self.app.set_status("Ready • Payhip draft submitted")
                 self.say("PAYHIP AUTOPILOT: " + result["status"] +
-                         "\nPage: " + result["url"] +
-                         "\nGuide: " + result["research_url"] +
-                         "\n" + result["warning"])
+                         "\\nPage: " + result["url"] +
+                         "\\nGuide: " + result["research_url"] +
+                         "\\n" + result["warning"])
             self._launch("Falcon is researching and building the Payhip listing…",
                          work, complete)
             return
