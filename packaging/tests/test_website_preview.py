@@ -47,10 +47,11 @@ class WebsitePreviewTests(unittest.TestCase):
 
     def test_missing_index_and_browser_failure(self):
         target = self.workspace / "lostfalcon_site/index.html"
+        original = target.read_text(encoding="utf-8")
         target.unlink()
         with self.assertRaises(dev.ProjectError):
             preview.preview_url("lostfalcon_site", workspace=self.workspace)
-        target.write_text("<html></html>", encoding="utf-8")
+        target.write_text(original, encoding="utf-8")
         with self.assertRaisesRegex(dev.ProjectError, "Default browser"):
             preview.open_website("lostfalcon_site", workspace=self.workspace,
                                  opener=Mock(return_value=False))
