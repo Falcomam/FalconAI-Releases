@@ -6,8 +6,8 @@ from stage_shorts import stage_shorts
 ROOT=Path(__file__).resolve().parents[1]
 BASE=ROOT/"build/Falcon_Ai_V14_2_Candidate"
 BASE_RUNTIME=ROOT/"build/falcon_app_v142_runtime"
-TARGET=ROOT/"build/Falcon_Ai_V14_3_1_Candidate"
-RUNTIME=ROOT/"build/falcon_app_v1431_runtime"
+TARGET=ROOT/"build/Falcon_Ai_V14_3_2_Candidate"
+RUNTIME=ROOT/"build/falcon_app_v1432_runtime"
 
 def replace(path, old, new):
     text=path.read_text(encoding="utf-8")
@@ -46,31 +46,31 @@ def main():
         text=file.read_text(encoding="utf-8")
         if "V14.2.0" not in text:
             raise RuntimeError("Missing prior GUI version")
-        file.write_text(text.replace("V14.2.0","V14.3.1"),encoding="utf-8")
-    replace(TARGET/"RELEASE_VERSION.txt","14.2.0","14.3.1")
-    replace(TARGET/"release_updates.py","CURRENT_VERSION = (14, 2, 0)","CURRENT_VERSION = (14, 3, 1)")
-    replace(RUNTIME/"app_updates.py","CURRENT_VERSION = (14, 2, 0)","CURRENT_VERSION = (14, 3, 1)")
+        file.write_text(text.replace("V14.2.0","V14.3.2"),encoding="utf-8")
+    replace(TARGET/"RELEASE_VERSION.txt","14.2.0","14.3.2")
+    replace(TARGET/"release_updates.py","CURRENT_VERSION = (14, 2, 0)","CURRENT_VERSION = (14, 3, 2)")
+    replace(RUNTIME/"app_updates.py","CURRENT_VERSION = (14, 2, 0)","CURRENT_VERSION = (14, 3, 2)")
     entry=RUNTIME/"app_entry.py"
-    replace(entry,"CURRENT_VERSION != (14, 2, 0)","CURRENT_VERSION != (14, 3, 1)")
-    replace(entry,"version_file.read_text(encoding='utf-8').strip() != '14.2.0'","version_file.read_text(encoding='utf-8').strip() != '14.3.1'")
+    replace(entry,"CURRENT_VERSION != (14, 2, 0)","CURRENT_VERSION != (14, 3, 2)")
+    replace(entry,"version_file.read_text(encoding='utf-8').strip() != '14.2.0'","version_file.read_text(encoding='utf-8').strip() != '14.3.2'")
     replace(entry,"    if '--falcon-store-self-test' in sys.argv:\n",FROZEN_GATE+"    if '--falcon-store-self-test' in sys.argv:\n")
     iss=RUNTIME/"Falcon_Ai.iss"
-    replace(iss,'#define MyAppVersion "14.2.0"','#define MyAppVersion "14.3.1"')
+    replace(iss,'#define MyAppVersion "14.2.0"','#define MyAppVersion "14.3.2"')
     text=iss.read_text(encoding="utf-8")
     if "falcon_app_v142_runtime" not in text:
         raise RuntimeError("Expected prior runtime icon path")
-    iss.write_text(text.replace("falcon_app_v142_runtime","falcon_app_v1431_runtime"),encoding="utf-8")
+    iss.write_text(text.replace("falcon_app_v142_runtime","falcon_app_v1432_runtime"),encoding="utf-8")
     def app_id(file):
         return [line for line in file.read_text(encoding="utf-8").splitlines() if line.startswith("AppId=")]
     if len(app_id(iss))!=1 or app_id(iss)!=app_id(BASE_RUNTIME/"Falcon_Ai.iss"):
         raise RuntimeError("Installer identity changed")
     foundation=TARGET/"falcon_foundation.py"
-    replace(foundation,'VERSION = "14.2.0"','VERSION = "14.3.1"')
-    replace(foundation,'if VERSION != "14.2.0":','if VERSION != "14.3.1":')
+    replace(foundation,'VERSION = "14.2.0"','VERSION = "14.3.2"')
+    replace(foundation,'if VERSION != "14.2.0":','if VERSION != "14.3.2":')
     anchor='    Capability("trusted_updates", "Verified Windows updates", "available",'
     replace(foundation,anchor,'    Capability("shorts", "Daily local Shorts drafts", "limited",\n               "Original procedural cartoon drafts, preview and reviewed upload; requires local media tools and account authorization."),\n'+anchor)
-    (TARGET/"README_FALCON_AI_V14_3_1.txt").write_text(
-        "Falcon 14.3.1 - Shorts Money Mode\n"
+    (TARGET/"README_FALCON_AI_V14_3_2.txt").write_text(
+        "Falcon 14.3.2 - Shorts Money Mode\n"
         "Open Money Mode for startup report, daily local drafts, preview, reviewed upload or manual Studio handoff.\n"
         "Requires local Ollama and FFmpeg/ffprobe on PATH; actual YouTube authorization and commercial-use voice rights are the owner's responsibility.\n"
         "No automatic public uploads, revenue guarantee or AI diffusion animation. Retains V14.2 features.\n",encoding="utf-8")
@@ -89,7 +89,7 @@ FROZEN_GATE = '''    if '--falcon-shorts-self-test' in sys.argv:
         return 0
 '''
 
-SHORTS_METHODS = "    def _setup_money_mode(self):\n        if getattr(self, \"_money_controls\", None) is not None:\n            return\n        self._shorts_status()\n        try:\n            import shorts_controls\n            self._money_controls = shorts_controls.MoneyControls(self)\n        except (ImportError, AttributeError, RuntimeError, OSError) as exc:\n            self.say(\"Money Mode controls unavailable: \" + str(exc)[:160])\n\n    def _shorts_status(self):\n        try:\n            import shorts_report\n            self.say(shorts_report.report(gaming=gaming_mode.enabled()))\n        except (ImportError, OSError, ValueError):\n            self.say(\"Shorts report unavailable in this build. No video was generated or uploaded.\")\n\n    def _shorts_draft(self):\n        if gaming_mode.enabled():\n            self.say(\"Gaming Mode is ON. Shorts generation is paused.\")\n            return\n\n        def work(cancel):\n            try:\n                import shorts_mode\n                status = engine_manager.probe(timeout=3)\n                model = engine_manager.saved_chat_model()\n                if not status[\"online\"] or model not in status[\"models\"]:\n                    raise RuntimeError(\"Selected Ollama chat model is unavailable.\")\n                folder = shorts_mode.create(model, cancel=cancel)\n                return True, str(folder)\n            except Exception as exc:\n                return False, str(exc)[:300]\n\n        def complete(result):\n            ok, detail = result\n            self.app.set_status(\"Ready • Shorts\" if ok else \"Error • Shorts\")\n            self.say((\"Local draft ready for review. No upload performed.\\n\" if ok else\n                      \"Shorts draft not completed; partial files may exist.\\n\") + detail)\n\n        self._launch(\"Rendering local Short…\", work, complete)\n\n"
+SHORTS_METHODS = "    def _setup_money_mode(self):\n        if getattr(self, \"_money_controls\", None) is not None:\n            return\n        self._shorts_status()\n        try:\n            import shorts_controls\n            self._money_controls = shorts_controls.MoneyControls(self)\n        except (ImportError, AttributeError, RuntimeError, OSError) as exc:\n            self.say(\"Money Mode controls unavailable: \" + str(exc)[:160])\n\n    def _shorts_status(self):\n        try:\n            import shorts_report\n            self.say(shorts_report.report(gaming=gaming_mode.enabled()))\n        except (ImportError, OSError, ValueError):\n            self.say(\"Shorts report unavailable in this build. No video was generated or uploaded.\")\n\n    def _shorts_draft(self):\n        if gaming_mode.enabled():\n            self.say(\"Gaming Mode is ON. Shorts generation is paused.\")\n            return\n\n        def work(cancel):\n            try:\n                import shorts_mode\n                status = engine_manager.probe(timeout=3)\n                model = shorts_mode.preferred_story_model(engine_manager.saved_chat_model(), status[\"models\"])\n                if not status[\"online\"] or model not in status[\"models\"]:\n                    raise RuntimeError(\"Selected Ollama chat model is unavailable.\")\n                folder = shorts_mode.create(model, cancel=cancel)\n                return True, str(folder)\n            except Exception as exc:\n                return False, str(exc)[:300]\n\n        def complete(result):\n            ok, detail = result\n            self.app.set_status(\"Ready • Shorts\" if ok else \"Error • Shorts\")\n            self.say((\"Local draft ready for review. No upload performed.\\n\" if ok else\n                      \"Shorts draft not completed; partial files may exist.\\n\") + detail)\n\n        self._launch(\"Rendering local Short…\", work, complete)\n\n"
 
 if __name__ == '__main__':
     main()
