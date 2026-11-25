@@ -123,3 +123,13 @@ Indexed supporting video summaries:
 ## Priority decision
 
 **First build a small Falcon-to-LDR bridge and test cited research in the existing purple chat.** Only then add persistent source-linked recall and automatic browser visual checks. This is a better use of time than adding a dozen independent slash-commands or writing another Wikipedia-only research loop.
+
+## Added review: Tech With Tim — Local AI Explained (user-submitted video)
+
+- Original: https://www.youtube.com/watch?v=edIHPoWgIKU (published Aug 31, 2026, approx. 24:27)
+- Caption-track mirror inspected: https://prepublish.ai/youtube-transcript/edIHPoWgIKU
+- Main timestamps: 02:29 model files, 03:13 parameter sizes, 03:51 quantization, 04:44 inference engines, 05:23 VRAM/context, 12:12 LM Studio, 15:52 Ollama, 19:00 Docker Model Runner, 21:05 direct code, 23:04 choosing a tool.
+- **Falcon takeaway:** existing Ollama localhost engine is architecturally appropriate for a Python/Windows assistant. No need to replace it with LM Studio or Docker just to have a stronger agent. Instead focus on stronger installed models, verifiable tool usage, browser worker and retrieval memory. Larger context uses more RAM/VRAM; test on actual RTX 4060.
+- At about 09:43 the video **sponsors MindsHub Cowork** and calls its Anton harness open-source. This is a commercial segment, not an independent evaluation of safety, quality or cost. Repos: https://github.com/mindsdb/mindshub and https://github.com/mindsdb/anton; MindsHub's official README says hosted Pro adds paid capabilities and open-source components have their own licenses.
+- **Security review required before installing/reusing Anton/MindsHub:** a public critical advisory documents unauthenticated code execution in an older deployment and lists no patched version on its advisory page: https://github.com/mindsdb/mindshub/security/advisories/GHSA-jcxw-h8ph-pxpv . This does **not** establish that every current version is vulnerable. Do not recommend executing remote install scripts or giving it full desktop access until exact current code, release, authentication, network binding and security status are independently validated.
+- This video explains **how to run** models. It does not itself implement automatic search, reliable memory, safe browser control or website visual review. Those are separate Falcon integration tasks.
