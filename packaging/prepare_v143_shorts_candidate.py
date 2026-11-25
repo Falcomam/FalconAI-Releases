@@ -6,8 +6,8 @@ from stage_shorts import stage_shorts
 ROOT=Path(__file__).resolve().parents[1]
 BASE=ROOT/"build/Falcon_Ai_V14_2_Candidate"
 BASE_RUNTIME=ROOT/"build/falcon_app_v142_runtime"
-TARGET=ROOT/"build/Falcon_Ai_V14_3_Candidate"
-RUNTIME=ROOT/"build/falcon_app_v143_runtime"
+TARGET=ROOT/"build/Falcon_Ai_V14_3_1_Candidate"
+RUNTIME=ROOT/"build/falcon_app_v1431_runtime"
 
 def replace(path, old, new):
     text=path.read_text(encoding="utf-8")
@@ -46,31 +46,31 @@ def main():
         text=file.read_text(encoding="utf-8")
         if "V14.2.0" not in text:
             raise RuntimeError("Missing prior GUI version")
-        file.write_text(text.replace("V14.2.0","V14.3.0"),encoding="utf-8")
-    replace(TARGET/"RELEASE_VERSION.txt","14.2.0","14.3.0")
-    replace(TARGET/"release_updates.py","CURRENT_VERSION = (14, 2, 0)","CURRENT_VERSION = (14, 3, 0)")
-    replace(RUNTIME/"app_updates.py","CURRENT_VERSION = (14, 2, 0)","CURRENT_VERSION = (14, 3, 0)")
+        file.write_text(text.replace("V14.2.0","V14.3.1"),encoding="utf-8")
+    replace(TARGET/"RELEASE_VERSION.txt","14.2.0","14.3.1")
+    replace(TARGET/"release_updates.py","CURRENT_VERSION = (14, 2, 0)","CURRENT_VERSION = (14, 3, 1)")
+    replace(RUNTIME/"app_updates.py","CURRENT_VERSION = (14, 2, 0)","CURRENT_VERSION = (14, 3, 1)")
     entry=RUNTIME/"app_entry.py"
-    replace(entry,"CURRENT_VERSION != (14, 2, 0)","CURRENT_VERSION != (14, 3, 0)")
-    replace(entry,"version_file.read_text(encoding='utf-8').strip() != '14.2.0'","version_file.read_text(encoding='utf-8').strip() != '14.3.0'")
+    replace(entry,"CURRENT_VERSION != (14, 2, 0)","CURRENT_VERSION != (14, 3, 1)")
+    replace(entry,"version_file.read_text(encoding='utf-8').strip() != '14.2.0'","version_file.read_text(encoding='utf-8').strip() != '14.3.1'")
     replace(entry,"    if '--falcon-store-self-test' in sys.argv:\n",FROZEN_GATE+"    if '--falcon-store-self-test' in sys.argv:\n")
     iss=RUNTIME/"Falcon_Ai.iss"
-    replace(iss,'#define MyAppVersion "14.2.0"','#define MyAppVersion "14.3.0"')
+    replace(iss,'#define MyAppVersion "14.2.0"','#define MyAppVersion "14.3.1"')
     text=iss.read_text(encoding="utf-8")
     if "falcon_app_v142_runtime" not in text:
         raise RuntimeError("Expected prior runtime icon path")
-    iss.write_text(text.replace("falcon_app_v142_runtime","falcon_app_v143_runtime"),encoding="utf-8")
+    iss.write_text(text.replace("falcon_app_v142_runtime","falcon_app_v1431_runtime"),encoding="utf-8")
     def app_id(file):
         return [line for line in file.read_text(encoding="utf-8").splitlines() if line.startswith("AppId=")]
     if len(app_id(iss))!=1 or app_id(iss)!=app_id(BASE_RUNTIME/"Falcon_Ai.iss"):
         raise RuntimeError("Installer identity changed")
     foundation=TARGET/"falcon_foundation.py"
-    replace(foundation,'VERSION = "14.2.0"','VERSION = "14.3.0"')
-    replace(foundation,'if VERSION != "14.2.0":','if VERSION != "14.3.0":')
+    replace(foundation,'VERSION = "14.2.0"','VERSION = "14.3.1"')
+    replace(foundation,'if VERSION != "14.2.0":','if VERSION != "14.3.1":')
     anchor='    Capability("trusted_updates", "Verified Windows updates", "available",'
     replace(foundation,anchor,'    Capability("shorts", "Daily local Shorts drafts", "limited",\n               "Original procedural cartoon drafts, preview and reviewed upload; requires local media tools and account authorization."),\n'+anchor)
-    (TARGET/"README_FALCON_AI_V14_3.txt").write_text(
-        "Falcon 14.3.0 - Shorts Money Mode\n"
+    (TARGET/"README_FALCON_AI_V14_3_1.txt").write_text(
+        "Falcon 14.3.1 - Shorts Money Mode\n"
         "Open Money Mode for startup report, daily local drafts, preview, reviewed upload or manual Studio handoff.\n"
         "Requires local Ollama and FFmpeg/ffprobe on PATH; actual YouTube authorization and commercial-use voice rights are the owner's responsibility.\n"
         "No automatic public uploads, revenue guarantee or AI diffusion animation. Retains V14.2 features.\n",encoding="utf-8")
