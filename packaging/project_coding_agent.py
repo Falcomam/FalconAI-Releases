@@ -396,6 +396,20 @@ def generate_new_project_with_architect(kind, goal, *, model, cancel, ask,
         token_limit=6500, total_timeout=min(180, remaining))
     if cancel.is_set() or generated is None:
         return None
+    # A plan is useful only when the proposed source actually implements its
+    # declared file inventory. Validate the whole set rather than trusting an
+    # LLM's completion statement. The generated proposal is still inert.
+    planned_files = set(blueprint["files"])
+    actual_files = set(generated["files"])
+    if actual_files != planned_files:
+        missing = sorted(planned_files - actual_files)
+        unexpected = sorted(actual_files - planned_files)
+        raise AgentError(
+            "Generated source does not match the approved architecture: "
+            + ("missing " + ", ".join(missing) + "; " if missing else "")
+            + ("unexpected " + ", ".join(unexpected) if unexpected else "")
+            + ". No files were saved or executed."
+        )
     reviewed = projects.review_proposal(generated)
     return {
         "plan": generated,

@@ -8,6 +8,13 @@ on:
       - "packaging/tests/test_project_coding_agent.py"
       - "packaging/tests/test_project_agent_chat.py"
       - "packaging/prepare_agent_coding_candidate.py"
+  pull_request:
+    paths:
+      - ".github/workflows/validate-agent-coding-candidate.yml"
+      - "packaging/project_coding_agent.py"
+      - "packaging/tests/test_project_coding_agent.py"
+      - "packaging/tests/test_project_agent_chat.py"
+      - "packaging/prepare_agent_coding_candidate.py"
   workflow_dispatch:
 permissions:
   contents: read
