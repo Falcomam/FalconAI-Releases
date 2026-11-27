@@ -129,7 +129,9 @@ def render_to(client, graph, target, stop, gaming, progress, *, output_node=None
         else:
             _media_command([*decode, "-f", "null", "-"], stop, gaming, 180)
         check_active(stop, gaming)
-        temp.replace(target)
+        # Publish atomically without replacing a file created during generation.
+        # Both paths are on the same volume; unsupported filesystems fail closed.
+        target.hardlink_to(temp)
         return target
     finally:
         if temp is not None:
