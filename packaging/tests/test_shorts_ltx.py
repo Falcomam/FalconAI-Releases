@@ -120,6 +120,19 @@ class LTXContractTests(unittest.TestCase):
         self.assertEqual(graph["10"]["inputs"]["samples"], ["9", 0])
         self.assertFalse((video.parent / "upload_attempt.json").exists())
 
+    def test_concurrent_output_is_never_overwritten(self):
+        engine = ltx.LTXVideo.connect(client=self.client)
+        target = self.root / "clip.mp4"
+        def progress(message):
+            if message == "Verifying the generated video":
+                target.write_bytes(b"existing output")
+        with self.assertRaises(FileExistsError):
+            engine.render("A falcon banks left.", target, self.stop.is_set,
+                          lambda: False, width=96, height=160, frames=49,
+                          progress=progress)
+        self.assertEqual(target.read_bytes(), b"existing output")
+        self.assertEqual(list(self.root.iterdir()), [target])
+
     def test_dynamic_save_and_models_in_subfolder(self):
         self.dynamic = True
         self.models = ["video/" + ltx.CHECKPOINT]
